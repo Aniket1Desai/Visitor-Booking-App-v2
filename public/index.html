@@ -1,0 +1,1771 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Open Nest - Private Viewing Portal</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Plus+Jakarta+Sans:wght@300;400;500;700&display=swap"
+        rel="stylesheet">
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Leaflet Map CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Main Style -->
+    <link rel="stylesheet" href="styles.css">
+
+    <style>
+        .ts-localstorage-notice {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            background: rgba(6, 182, 212, 0.08);
+            border: 1px solid rgba(6, 182, 212, 0.28);
+            border-radius: 10px;
+            padding: 12px 15px;
+            margin-bottom: 14px;
+            font-size: 0.82rem;
+            line-height: 1.55;
+            color: var(--text-secondary, #94a3b8);
+        }
+
+        .ts-localstorage-notice .notice-icon {
+            color: #06B6D4;
+            font-size: 1.05rem;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+
+        .ts-localstorage-notice strong {
+            color: var(--text-primary, #e2e8f0);
+            display: block;
+            margin-bottom: 4px;
+            font-size: 0.84rem;
+        }
+
+        .ts-localstorage-notice code {
+            background: rgba(255, 255, 255, 0.08);
+            padding: 1px 6px;
+            border-radius: 4px;
+            font-size: 0.78rem;
+            font-family: monospace;
+        }
+
+        /* ══════════════════════════════════════════════════
+           RBAC LOGIN SYSTEM STYLES
+           ══════════════════════════════════════════════════ */
+
+        /* Full-screen login overlay — sits above everything */
+        #login-screen {
+            position: fixed;
+            inset: 0;
+            z-index: 99999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #0a0a14;
+            overflow: hidden;
+        }
+
+        /* Animated gradient blobs behind the login card */
+        #login-screen .login-blobs {
+            position: absolute;
+            inset: 0;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        #login-screen .login-blobs span {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.35;
+            animation: blobFloat 8s ease-in-out infinite alternate;
+        }
+
+        #login-screen .login-blobs span:nth-child(1) {
+            width: 520px;
+            height: 520px;
+            background: radial-gradient(circle, #7C3AED, transparent 70%);
+            top: -120px;
+            left: -160px;
+            animation-duration: 9s;
+        }
+
+        #login-screen .login-blobs span:nth-child(2) {
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, #06B6D4, transparent 70%);
+            bottom: -100px;
+            right: -120px;
+            animation-duration: 11s;
+            animation-delay: -4s;
+        }
+
+        #login-screen .login-blobs span:nth-child(3) {
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, #EC4899, transparent 70%);
+            top: 50%;
+            left: 55%;
+            animation-duration: 13s;
+            animation-delay: -2s;
+        }
+
+        @keyframes blobFloat {
+            0% {
+                transform: translate(0, 0) scale(1);
+            }
+
+            100% {
+                transform: translate(30px, 20px) scale(1.08);
+            }
+        }
+
+        /* Glass login card */
+        .login-card {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 440px;
+            margin: 0 16px;
+            background: rgba(15, 15, 30, 0.75);
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            border-radius: 24px;
+            padding: 48px 44px 40px;
+            backdrop-filter: blur(28px);
+            box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+            animation: cardIn 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+
+        @keyframes cardIn {
+            from {
+                opacity: 0;
+                transform: translateY(30px) scale(0.96);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .login-logo {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .login-logo .logo-text {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 800;
+            font-size: 1.9rem;
+            letter-spacing: 0.04em;
+            background: linear-gradient(135deg, #8B5CF6, #06B6D4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .login-logo .logo-sub {
+            display: block;
+            font-size: 0.78rem;
+            color: rgba(148, 163, 184, 0.7);
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            margin-top: 4px;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+
+        .login-divider {
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.4), rgba(6, 182, 212, 0.4), transparent);
+            margin: 22px 0;
+        }
+
+        .login-heading {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #e2e8f0;
+            margin: 0 0 6px;
+            text-align: center;
+        }
+
+        .login-subheading {
+            font-size: 0.82rem;
+            color: rgba(148, 163, 184, 0.7);
+            text-align: center;
+            margin: 0 0 28px;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+
+        /* Role selection tiles */
+        .role-tiles {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 26px;
+        }
+
+        .role-tile {
+            position: relative;
+            padding: 16px 14px;
+            border-radius: 14px;
+            border: 1.5px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.03);
+            cursor: pointer;
+            transition: all 0.22s ease;
+            text-align: center;
+            overflow: hidden;
+        }
+
+        .role-tile:hover {
+            border-color: rgba(139, 92, 246, 0.45);
+            background: rgba(139, 92, 246, 0.07);
+            transform: translateY(-2px);
+        }
+
+        .role-tile.selected {
+            border-color: #8B5CF6;
+            background: rgba(139, 92, 246, 0.14);
+            box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.3), 0 4px 20px rgba(139, 92, 246, 0.2);
+        }
+
+        .role-tile.selected-cyan {
+            border-color: #06B6D4;
+            background: rgba(6, 182, 212, 0.12);
+            box-shadow: 0 0 0 1px rgba(6, 182, 212, 0.3), 0 4px 20px rgba(6, 182, 212, 0.18);
+        }
+
+        .role-tile .tile-icon {
+            font-size: 1.5rem;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .role-tile[data-role="visitor"] .tile-icon {
+            color: #06B6D4;
+        }
+
+        .role-tile[data-role="admin"] .tile-icon {
+            color: #8B5CF6;
+        }
+
+        .role-tile[data-role="manager"] .tile-icon {
+            color: #F59E0B;
+        }
+
+        .role-tile[data-role="agent"] .tile-icon {
+            color: #10B981;
+        }
+
+        .role-tile .tile-label {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 600;
+            font-size: 0.88rem;
+            color: #e2e8f0;
+            display: block;
+        }
+
+        .role-tile .tile-desc {
+            font-size: 0.72rem;
+            color: rgba(148, 163, 184, 0.65);
+            margin-top: 3px;
+            display: block;
+            line-height: 1.45;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+
+        .role-tile .tile-check {
+            position: absolute;
+            top: 8px;
+            right: 10px;
+            font-size: 0.75rem;
+            opacity: 0;
+            transition: opacity 0.2s;
+            color: #8B5CF6;
+        }
+
+        .role-tile.selected .tile-check,
+        .role-tile.selected-cyan .tile-check {
+            opacity: 1;
+        }
+
+        /* Login form fields */
+        .login-field-group {
+            margin-bottom: 16px;
+        }
+
+        .login-field-group label {
+            display: block;
+            font-size: 0.8rem;
+            color: rgba(148, 163, 184, 0.8);
+            margin-bottom: 7px;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-weight: 500;
+        }
+
+        .login-field-group input {
+            width: 100%;
+            padding: 12px 16px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1.5px solid rgba(255, 255, 255, 0.09);
+            border-radius: 10px;
+            color: #e2e8f0;
+            font-size: 0.9rem;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            box-sizing: border-box;
+        }
+
+        .login-field-group input:focus {
+            border-color: rgba(139, 92, 246, 0.6);
+            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.12);
+        }
+
+        .login-field-group input::placeholder {
+            color: rgba(148, 163, 184, 0.4);
+        }
+
+        .login-hint {
+            font-size: 0.73rem;
+            color: rgba(148, 163, 184, 0.5);
+            margin-top: 5px;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+
+        /* Login button */
+        .btn-login {
+            width: 100%;
+            padding: 14px;
+            border-radius: 12px;
+            border: none;
+            background: linear-gradient(135deg, #7C3AED, #06B6D4);
+            color: #fff;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 600;
+            font-size: 0.97rem;
+            cursor: pointer;
+            letter-spacing: 0.02em;
+            transition: all 0.22s ease;
+            position: relative;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+
+        .btn-login:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 28px rgba(124, 58, 237, 0.45);
+        }
+
+        .btn-login:active {
+            transform: translateY(0);
+        }
+
+        .btn-login.loading {
+            opacity: 0.75;
+            pointer-events: none;
+        }
+
+        .login-error {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 10px;
+            padding: 10px 14px;
+            font-size: 0.8rem;
+            color: #FCA5A5;
+            margin-bottom: 14px;
+            display: none;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+
+        .login-error.visible {
+            display: block;
+        }
+
+        /* Role badge shown in nav after login */
+        .role-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            font-family: 'Outfit', sans-serif;
+            letter-spacing: 0.04em;
+        }
+
+        .role-badge.badge-visitor {
+            background: rgba(6, 182, 212, 0.15);
+            color: #06B6D4;
+            border: 1px solid rgba(6, 182, 212, 0.3);
+        }
+
+        .role-badge.badge-admin {
+            background: rgba(139, 92, 246, 0.15);
+            color: #8B5CF6;
+            border: 1px solid rgba(139, 92, 246, 0.3);
+        }
+
+        .role-badge.badge-manager {
+            background: rgba(245, 158, 11, 0.15);
+            color: #F59E0B;
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+
+        .role-badge.badge-agent {
+            background: rgba(16, 185, 129, 0.15);
+            color: #10B981;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        /* Logout button in nav */
+        .btn-logout {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 7px 14px;
+            background: rgba(239, 68, 68, 0.12);
+            border: 1px solid rgba(239, 68, 68, 0.25);
+            border-radius: 10px;
+            color: #FCA5A5;
+            font-size: 0.8rem;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-logout:hover {
+            background: rgba(239, 68, 68, 0.22);
+            border-color: rgba(239, 68, 68, 0.45);
+            transform: translateY(-1px);
+        }
+
+        /* Theme overrides per role */
+        body.theme-manager {
+            --accent-violet: #F59E0B;
+            --accent-cyan: #FCD34D;
+        }
+
+        body.theme-agent {
+            --accent-violet: #10B981;
+            --accent-cyan: #34D399;
+        }
+
+        /* Hide main app until logged in */
+        #app-wrapper {
+            display: none;
+        }
+
+        #app-wrapper.logged-in {
+            display: block;
+        }
+    </style>
+</head>
+
+<body class="dark-theme">
+
+    <!-- ══════════════════════════════════════════════════
+         RBAC LOGIN SCREEN
+    ══════════════════════════════════════════════════ -->
+    <div id="login-screen">
+        <!-- Animated backdrop blobs -->
+        <div class="login-blobs">
+            <span></span><span></span><span></span>
+        </div>
+
+        <div class="login-card">
+            <!-- Brand -->
+            <div class="login-logo">
+                <span class="logo-text">OPEN NEST</span>
+                <span class="logo-sub">Private Viewing Portal</span>
+            </div>
+
+            <div class="login-divider"></div>
+
+            <h2 class="login-heading">Select Your Access Role</h2>
+            <p class="login-subheading">Choose the role that matches your clearance level, then sign in.</p>
+
+            <!-- Role tiles -->
+            <div class="role-tiles" id="login-role-tiles">
+                <div class="role-tile" data-role="visitor" onclick="selectLoginRole(this)">
+                    <i class="fa-solid fa-user tile-icon"></i>
+                    <span class="tile-label">Visitor</span>
+                    <span class="tile-desc">Book tours &amp; view rules</span>
+                    <i class="fa-solid fa-circle-check tile-check"></i>
+                </div>
+                <div class="role-tile" data-role="admin" onclick="selectLoginRole(this)">
+                    <i class="fa-solid fa-user-shield tile-icon"></i>
+                    <span class="tile-label">Admin</span>
+                    <span class="tile-desc">Full system access</span>
+                    <i class="fa-solid fa-circle-check tile-check"></i>
+                </div>
+            </div>
+
+            <!-- Error message -->
+            <div class="login-error" id="login-error-msg">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                <span id="login-error-text">Please select a role before continuing.</span>
+            </div>
+
+            <!-- Credentials -->
+            <div id="login-credentials-section" style="display: none;">
+                <div class="login-field-group">
+                    <label for="login-email">Email Address</label>
+                    <input type="email" id="login-email" placeholder="e.g. admin@opennest.com" autocomplete="email">
+                </div>
+                <div class="login-field-group">
+                    <label for="login-password">Password</label>
+                    <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password"
+                        onkeydown="if(event.key==='Enter') doLogin()">
+                </div>
+            </div>
+
+            <button class="btn-login" id="btn-login-submit" onclick="doLogin()">
+                <i class="fa-solid fa-right-to-bracket"></i>&nbsp; Sign In &amp; Enter Portal
+            </button>
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════
+         MAIN APPLICATION — hidden until login succeeds
+    ══════════════════════════════════════════════════ -->
+    <div id="app-wrapper">
+
+        <!-- Dynamic Glowing Backdrop Blobs for Glassmorphism Context -->
+        <div class="glow-bg">
+            <div class="blob blob-purple"></div>
+            <div class="blob blob-cyan"></div>
+            <div class="blob blob-pink"></div>
+        </div>
+
+        <!-- Navigation Header -->
+        <header class="glass-nav">
+            <div class="logo" onclick="showSection('hero-section')">
+                <span class="gradient-text">OPEN</span> NEST
+            </div>
+
+            <!-- Navigation Tabs -->
+            <nav>
+                <a href="#" class="nav-link active" data-target="hero-section"><i class="fa-solid fa-house"></i>
+                    Home</a>
+                <a href="#" class="nav-link visitor-only" data-target="booking-section" id="nav-book-link"><i
+                        class="fa-solid fa-calendar-days"></i> Book Tour</a>
+                <a href="#" class="nav-link visitor-only" data-target="visitor-rules-section" id="nav-rules-link"><i
+                        class="fa-solid fa-shield-halved"></i> Viewing Rules</a>
+                <a href="#" class="nav-link admin-only" data-target="dashboard-section" id="nav-dashboard-link"
+                    style="display:none;"><i class="fa-solid fa-chart-line"></i> Dashboard</a>
+                <a href="#" class="nav-link admin-only" data-target="admin-schemes-section" id="nav-schemes-link"
+                    style="display:none;"><i class="fa-solid fa-cubes"></i> Schemes</a>
+                <a href="#" class="nav-link admin-only" data-target="troubleshoot-section" id="nav-troubleshoot-link"
+                    style="display:none;"><i class="fa-solid fa-stethoscope"></i> Troubleshoot</a>
+                <a href="#" class="nav-link" data-target="location-section"><i class="fa-solid fa-map-location-dot"></i>
+                    Location</a>
+            </nav>
+
+            <!-- Controls -->
+            <div class="header-controls">
+                <!-- Theme Toggle -->
+                <button class="btn-theme-toggle" id="theme-toggle-btn" onclick="toggleTheme()"
+                    title="Toggle Light/Dark Theme">
+                    <i class="fa-solid fa-sun" id="theme-icon"></i>
+                </button>
+
+                <!-- Logged-in user role badge -->
+                <span class="role-badge" id="nav-role-badge" style="display:none;"></span>
+
+                <!-- Logout button -->
+                <button class="btn-logout" id="btn-logout" style="display:none;" onclick="doLogout()">
+                    <i class="fa-solid fa-right-from-bracket"></i> Logout
+                </button>
+
+                <!-- Role Selector Dropdown (visible admin only) -->
+                <div class="role-selector-container" id="role-selector-container">
+                    <button class="role-selector-btn" id="role-selector-trigger" onclick="toggleRoleDropdown(event)">
+                        <i class="fa-solid fa-user-circle" id="role-icon"></i>
+                        <span id="active-role-text">Visitor Role</span>
+                        <i class="fa-solid fa-chevron-down caret"></i>
+                    </button>
+                    <div class="role-dropdown glass-panel" id="role-dropdown-menu">
+                        <div class="role-option active" id="role-opt-visitor" onclick="switchRole('visitor')">
+                            <i class="fa-solid fa-user"></i>
+                            <div>
+                                <strong>Visitor View</strong>
+                                <p>Book private viewings &amp; inspect tour guidelines</p>
+                            </div>
+                        </div>
+                        <div class="role-option" id="role-opt-admin" onclick="switchRole('admin')">
+                            <i class="fa-solid fa-user-shield"></i>
+                            <div>
+                                <strong>Admin View</strong>
+                                <p>Manage house schemes, view stats &amp; visitor lists</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <button class="btn-primary visitor-only" id="header-reserve-btn"
+                    onclick="showSection('booking-section')">Reserve Tour</button>
+            </div>
+        </header>
+
+        <!-- Main Container -->
+        <main class="content-wrapper">
+
+            <!-- 1. HERO SECTION (agent / operator console) -->
+            <section id="hero-section" class="app-section active">
+                <div class="hero-grid">
+                    <div class="hero-left">
+                        <span class="badge-glow"><i class="fa-solid fa-gauge-high"></i> Agent Console</span>
+                        <h1 class="hero-title">Run every viewing <br>from <span class="gradient-text">one console</span>
+                        </h1>
+                        <p class="hero-subtitle">Create property schemes, publish viewing slots, and keep every
+                            booking in sync. When you hit save, your grid, the backup database, and SharePoint all
+                            update together — no manual re-entry, no guessing what went through.</p>
+
+                        <div class="spec-grid">
+                            <div class="spec-card glass-panel">
+                                <i class="fa-solid fa-cubes icon-violet"></i>
+                                <div>
+                                    <h4>Scheme Manager</h4>
+                                    <p>Create &amp; price viewing tiers</p>
+                                </div>
+                            </div>
+                            <div class="spec-card glass-panel">
+                                <i class="fa-solid fa-calendar-check icon-cyan"></i>
+                                <div>
+                                    <h4>Live Bookings</h4>
+                                    <p>Track every scheduled tour</p>
+                                </div>
+                            </div>
+                            <div class="spec-card glass-panel">
+                                <i class="fa-solid fa-arrows-rotate icon-blue"></i>
+                                <div>
+                                    <h4>Auto Sync</h4>
+                                    <p>SharePoint + backup, instantly</p>
+                                </div>
+                            </div>
+                            <div class="spec-card glass-panel">
+                                <i class="fa-solid fa-shield-halved icon-pink"></i>
+                                <div>
+                                    <h4>Viewing Rules</h4>
+                                    <p>Set visitor access policy</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="hero-right">
+                        <div class="showcase-card glass-panel text-center">
+                            <div class="showcase-img-container">
+                                <div class="vibe-overlay"></div>
+                                <div class="luxury-house-mockup">
+                                    <i class="fa-solid fa-gauge-high mock-house-icon"></i>
+                                    <span class="mock-tag"><i class="fa-solid fa-circle"
+                                            style="font-size:0.55rem; color:#4ade80;"></i> Live</span>
+                                </div>
+                            </div>
+                            <div class="showcase-details">
+                                <h3>Control Center</h3>
+                                <p>Schemes, viewings &amp; bookings — all in one place</p>
+
+                                <div class="tag-row">
+                                    <span class="spec-tag"><i class="fa-solid fa-cubes"></i> Active schemes</span>
+                                    <span class="spec-tag"><i class="fa-solid fa-calendar-day"></i> Today's tours</span>
+                                </div>
+
+                                <button class="btn-primary btn-full-width btn-glow"
+                                    onclick="showSection('booking-section')">
+                                    <i class="fa-solid fa-calendar-plus"></i> Schedule a Viewing
+                                </button>
+
+                                <!-- Admin-only shortcuts: shown to admins by the RBAC script, hidden otherwise -->
+                                <div class="admin-only" style="display:none; margin-top:12px; display:flex; gap:10px;">
+                                    <button class="btn-secondary btn-full-width"
+                                        onclick="showSection('admin-schemes-section')">
+                                        <i class="fa-solid fa-cubes"></i> Manage Schemes
+                                    </button>
+                                    <button class="btn-secondary btn-full-width"
+                                        onclick="showSection('dashboard-section')">
+                                        <i class="fa-solid fa-chart-line"></i> Dashboard
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 2. BOOKING SECTION -->
+            <section id="booking-section" class="app-section visitor-only">
+                <div class="section-header text-center">
+                    <h2 class="section-title">Schedule Your <span class="gradient-text">Private Viewing</span></h2>
+                    <p class="section-subtitle">Please enter your information to schedule your exclusive accompanied
+                        walk-through of the estate.</p>
+                </div>
+
+                <div class="booking-container glass-panel">
+                    <div class="step-indicator-wrapper">
+                        <div class="step-indicator active" id="step-dot-1">
+                            <span class="step-number">1</span>
+                            <span class="step-text">Visitor Details</span>
+                        </div>
+                        <div class="step-line" id="step-line-1"></div>
+                        <div class="step-indicator" id="step-dot-2">
+                            <span class="step-number">2</span>
+                            <span class="step-text">Date &amp; Time</span>
+                        </div>
+                        <div class="step-line" id="step-line-2"></div>
+                        <div class="step-indicator" id="step-dot-3">
+                            <span class="step-number">3</span>
+                            <span class="step-text">Special Requests</span>
+                        </div>
+                    </div>
+
+                    <!-- Step 1 -->
+                    <div class="booking-step active" id="booking-step-1">
+                        <form id="details-form" onsubmit="nextStep(2); return false;">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="visitor_name">Full Name <span class="required">*</span></label>
+                                    <input type="text" id="visitor_name" class="glass-input"
+                                        placeholder="e.g. Sarah Jenkins" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="visitor_email">Email Address <span class="required">*</span></label>
+                                    <input type="email" id="visitor_email" class="glass-input"
+                                        placeholder="e.g. sarah@example.com" required>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="visitor_phone">Mobile Number <span class="required">*</span></label>
+                                    <input type="tel" id="visitor_phone" class="glass-input"
+                                        placeholder="e.g. +1 (555) 019-2834" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="visitor_count">Number of Visitors</label>
+                                    <select id="visitor_count" class="glass-input">
+                                        <option value="1">1 Person</option>
+                                        <option value="2" selected>2 People</option>
+                                        <option value="3">3 People</option>
+                                        <option value="4">4 People</option>
+                                        <option value="5">5+ (Special Agent Request)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group" style="grid-column: span 2;">
+                                    <label for="booking_scheme">Select House Scheme / Property <span
+                                            class="required">*</span></label>
+                                    <select id="booking_scheme" class="glass-input" required>
+                                        <option value="" disabled selected>Loading active schemes...</option>
+                                    </select>
+                                    <p class="input-helper" id="scheme-helper-text">Each scheme specifies a distinct
+                                        tier of estate viewing access.</p>
+                                </div>
+                            </div>
+                            <div class="form-actions text-right">
+                                <button type="submit" class="btn-primary">Continue <i
+                                        class="fa-solid fa-arrow-right"></i></button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Step 2 -->
+                    <div class="booking-step" id="booking-step-2">
+                        <div class="form-row">
+                            <div class="form-group calendar-group">
+                                <label for="booking_date">Select Tour Date <span class="required">*</span></label>
+                                <input type="date" id="booking_date" class="glass-input" required>
+                                <p class="input-helper">Visits can be booked starting tomorrow and up to 30 days in
+                                    advance.</p>
+                            </div>
+                            <div class="form-group time-slots-group">
+                                <label>Select Tour Time <span class="required">*</span></label>
+                                <div class="time-slots-grid" id="slots-container"></div>
+                                <input type="hidden" id="selected_time" required>
+                            </div>
+                        </div>
+                        <div class="form-actions justify-between">
+                            <button type="button" class="btn-secondary" onclick="prevStep(1)"><i
+                                    class="fa-solid fa-arrow-left"></i> Back</button>
+                            <button type="button" class="btn-primary" onclick="validateStep2AndContinue()">Continue <i
+                                    class="fa-solid fa-arrow-right"></i></button>
+                        </div>
+                    </div>
+
+                    <!-- Step 3 -->
+                    <div class="booking-step" id="booking-step-3">
+                        <div class="form-group">
+                            <label for="special_requests">Special Tour Accommodations / Requests</label>
+                            <textarea id="special_requests" class="glass-input" rows="4"
+                                placeholder="Let us know if you require any specific assistance, high-fidelity security, translations, or have particular property questions."></textarea>
+                        </div>
+
+                        <div class="booking-summary glass-panel">
+                            <h4>Tour Summary</h4>
+                            <div class="summary-details">
+                                <p><strong>Visitor:</strong> <span id="sum-name">-</span> (<span id="sum-count">1</span>
+                                    person/s)</p>
+                                <p><strong>Property Scheme:</strong> <span id="sum-scheme">-</span></p>
+                                <p><strong>Schedule:</strong> <span id="sum-date">-</span> at <span
+                                        id="sum-time">-</span></p>
+                                <p><strong>Contact:</strong> <span id="sum-email">-</span> | <span
+                                        id="sum-phone">-</span></p>
+                            </div>
+                        </div>
+
+                        <div class="form-actions justify-between">
+                            <button type="button" class="btn-secondary" onclick="prevStep(2)"><i
+                                    class="fa-solid fa-arrow-left"></i> Back</button>
+                            <button type="button" class="btn-primary btn-glow" id="btn-submit-booking"
+                                onclick="submitBooking()"><i class="fa-solid fa-check"></i> Book Private Tour</button>
+                        </div>
+                    </div>
+
+                    <!-- Success Screen -->
+                    <div class="booking-step text-center py-5" id="booking-step-success">
+                        <div class="success-icon-wrapper">
+                            <i class="fa-solid fa-circle-check neon-pulse-icon"></i>
+                        </div>
+                        <h3 class="success-heading">Viewing Tour Confirmed!</h3>
+                        <p class="success-text">Your private viewing reservation for <strong
+                                id="success-date-time">-</strong> is successfully logged.</p>
+                        <p class="success-small-text">A confirmation packet and security protocols have been transmitted
+                            to your email.</p>
+
+                        <div class="glass-panel"
+                            style="margin: 22px 0 18px; padding: 14px; border-radius: 14px; text-align: left;">
+                            <p
+                                style="font-size: 0.82rem; color: var(--text-secondary); margin: 0 0 10px 0; display: flex; align-items: center; gap: 6px;">
+                                <i class="fa-solid fa-location-dot" style="color: var(--accent-violet);"></i>
+                                <strong>Estate Location</strong> &nbsp;—&nbsp; Bel Air, Los Angeles, CA
+                            </p>
+                            <div id="booking-success-map"
+                                style="width: 100%; height: 240px; border-radius: 10px; border: 1px solid var(--glass-border); z-index: 1;">
+                            </div>
+                            <p
+                                style="font-size: 0.75rem; color: var(--text-secondary); margin: 8px 0 0 0; text-align: center;">
+                                <i class="fa-solid fa-shield-halved"></i>&nbsp; Gated estate — accompanied access only.
+                                Coordinates: 34.0736° N, 118.4007° W
+                            </p>
+                        </div>
+
+                        <div class="success-buttons">
+                            <button class="btn-primary visitor-only" onclick="resetBookingForm()"><i
+                                    class="fa-solid fa-calendar-plus"></i> Book Another Slot</button>
+                            <button class="btn-primary admin-only" onclick="showSection('dashboard-section')"
+                                style="display:none;"><i class="fa-solid fa-table-list"></i> View Bookings</button>
+                            <button class="btn-secondary" onclick="resetBookingForm()"><i
+                                    class="fa-solid fa-rotate-left"></i> Start Over</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 3. VISITOR RULES SECTION -->
+            <section id="visitor-rules-section" class="app-section">
+                <div class="section-header text-center">
+                    <h2 class="section-title">Viewing Rules & <span class="gradient-text">Restrictions</span></h2>
+                    <p class="section-subtitle">To maintain privacy and security of the estate, all visitors must abide
+                        by these strict protocols.</p>
+                </div>
+
+                <div class="rules-container max-width-800">
+                    <div class="glass-panel p-45">
+                        <div class="rules-header">
+                            <i class="fa-solid fa-user-shield rules-shield-icon"></i>
+                            <h3>Visitor Verification &amp; Security Guidelines</h3>
+                        </div>
+
+                        <div class="rules-list">
+                            <div class="rule-item">
+                                <span class="rule-icon icon-cyan"><i class="fa-solid fa-lock"></i></span>
+                                <div class="rule-info">
+                                    <h4>Security Pre-Clearance Verification</h4>
+                                    <p>All visitors must provide valid government-issued photo identification.
+                                        Background verification is required at the main security gate prior to entrance
+                                        clearance.</p>
+                                </div>
+                            </div>
+
+                            <div class="rule-item">
+                                <span class="rule-icon icon-violet"><i class="fa-solid fa-user-check"></i></span>
+                                <div class="rule-info">
+                                    <h4>Accompanied Tour Arrangements</h4>
+                                    <p>Visits are conducted as strict, accompanied tours led by a licensed private
+                                        estate
+                                        coordinator. Unescorted wandering on the property acreage is strictly
+                                        prohibited.</p>
+                                </div>
+                            </div>
+
+                            <div class="rule-item">
+                                <span class="rule-icon icon-pink"><i class="fa-solid fa-users-slash"></i></span>
+                                <div class="rule-info">
+                                    <h4>Group Size Restrictions</h4>
+                                    <p>Private viewing bookings accommodate a maximum of five (5) individuals per time
+                                        slot.
+                                        Large private delegations require custom coordinator pre-clearance.</p>
+                                </div>
+                            </div>
+
+                            <div class="rule-item">
+                                <span class="rule-icon icon-blue"><i class="fa-solid fa-hourglass-end"></i></span>
+                                <div class="rule-info">
+                                    <h4>Strict Punctuality Limits</h4>
+                                    <p>Viewings are limited to 45 minutes to guarantee air filtration and high-fidelity
+                                        sterilization of touchpoints between scheduled viewing groups.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="text-center mt-30">
+                            <button class="btn-primary btn-glow" onclick="showSection('booking-section')">
+                                <i class="fa-solid fa-calendar-check"></i> Agree &amp; Schedule Viewing Tour
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 4. ADMIN DASHBOARD SECTION -->
+            <section id="dashboard-section" class="app-section admin-only">
+                <div class="section-header text-center">
+                    <h2 class="section-title">Viewing Tour <span class="gradient-text">Dashboard</span></h2>
+                    <p class="section-subtitle">Real-time status management console for all luxury showings of the
+                        estate.</p>
+                </div>
+
+                <div class="stats-row">
+                    <div class="stat-box glass-panel">
+                        <div class="stat-icon bg-violet-glow"><i class="fa-solid fa-calendar-check"></i></div>
+                        <div class="stat-data">
+                            <h3 id="stat-total-bookings">0</h3>
+                            <p>Total Bookings</p>
+                        </div>
+                    </div>
+                    <div class="stat-box glass-panel">
+                        <div class="stat-icon bg-cyan-glow"><i class="fa-solid fa-users"></i></div>
+                        <div class="stat-data">
+                            <h3 id="stat-total-visitors">0</h3>
+                            <p>Total Guests</p>
+                        </div>
+                    </div>
+                    <div class="stat-box glass-panel">
+                        <div class="stat-icon bg-pink-glow"><i class="fa-solid fa-hourglass-half"></i></div>
+                        <div class="stat-data">
+                            <h3 id="stat-upcoming">0</h3>
+                            <p>Upcoming Tours</p>
+                        </div>
+                    </div>
+                    <div class="stat-box glass-panel">
+                        <div class="stat-icon bg-red-glow"><i class="fa-solid fa-ban"></i></div>
+                        <div class="stat-data">
+                            <h3 id="stat-cancelled">0</h3>
+                            <p>Cancelled Tours</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dashboard-grid">
+                    <div class="dashboard-card glass-panel bookings-list-card">
+                        <div class="card-header">
+                            <h3>Registered Private Tours</h3>
+                            <div class="search-wrapper">
+                                <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                                <input type="text" id="search-input" class="glass-input"
+                                    placeholder="Search by name, email, or date..." oninput="filterBookings()">
+                            </div>
+                        </div>
+
+                        <div class="table-container">
+                            <table class="glass-table" id="bookings-table">
+                                <thead>
+                                    <tr>
+                                        <th>Date &amp; Time</th>
+                                        <th>Visitor Name</th>
+                                        <th>Contact Information</th>
+                                        <th>Guests</th>
+                                        <th>Property Scheme</th>
+                                        <th>Special Requests</th>
+                                        <th>Status</th>
+                                        <th class="text-center">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="bookings-tbody">
+                                    <tr>
+                                        <td colspan="8" class="text-center py-3 text-muted">
+                                            <i class="fa-solid fa-circle-notch fa-spin"></i> Fetching bookings...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="dashboard-card glass-panel admin-map-card">
+                        <div class="card-header">
+                            <h3><i class="fa-solid fa-map-location-dot text-cyan" style="margin-right: 8px;"></i>Estate
+                                Showcase Map</h3>
+                        </div>
+                        <div class="location-map-wrapper">
+                            <div id="admin-map"
+                                style="width:100%; height:380px; border-radius:15px; border:1px solid var(--glass-border);">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 5. ADMIN SCHEMES MANAGEMENT SECTION -->
+            <section id="admin-schemes-section" class="app-section admin-only">
+                <div class="section-header text-center">
+                    <h2 class="section-title">Property <span class="gradient-text">Scheme Manager</span></h2>
+                    <p class="section-subtitle">Add new villa schemes and viewing prices that dynamically populate the
+                        booking selectors.</p>
+                </div>
+
+                <div class="scheme-grid">
+                    <div class="scheme-form-card glass-panel">
+                        <h3>Create House Scheme</h3>
+                        <p class="text-secondary mb-20">Define property tiers, pricing levels, and access guidelines.
+                        </p>
+
+                        <form id="scheme-creation-form" onsubmit="submitScheme(event)">
+                            <div class="form-group mb-20">
+                                <label for="scheme_name_input">Scheme / Property Name <span
+                                        class="required">*</span></label>
+                                <input type="text" id="scheme_name_input" class="glass-input"
+                                    placeholder="e.g. Skyline Penthouse Premium" required>
+                            </div>
+
+                            <div class="form-group mb-20">
+                                <label for="scheme_address_input">
+                                    Property Address <span class="required">*</span>
+                                </label>
+                                <input type="text" id="scheme_address_input" class="glass-input"
+                                    placeholder="e.g. 750 Bel Air Road, Los Angeles, CA 90077" required>
+                                <p class="input-helper">Full street address of the estate shown to visitors after
+                                    booking.</p>
+                            </div>
+
+                            <div class="form-group mb-20">
+                                <label for="scheme_price_input">Base Price Label <span class="required">*</span></label>
+                                <input type="text" id="scheme_price_input" class="glass-input"
+                                    placeholder="e.g. $8.9 Million or Call Agent" required>
+                            </div>
+                            <div class="form-group mb-20">
+                                <label for="scheme_rules_input">Viewing Restrictions / Rules</label>
+                                <input type="text" id="scheme_rules_input" class="glass-input"
+                                    placeholder="e.g. Pre-cleared clients only, Weekends only">
+                            </div>
+                            <div class="form-group mb-25">
+                                <label for="scheme_desc_input">Short Description</label>
+                                <textarea id="scheme_desc_input" class="glass-input" rows="3"
+                                    placeholder="Brief outline of property inclusions, sizing, and key visual assets."></textarea>
+                            </div>
+
+                            <button type="submit" class="btn-primary btn-full-width btn-glow" id="btn-submit-scheme">
+                                <i class="fa-solid fa-plus-circle"></i> Create New Scheme
+                            </button>
+                        </form>
+                    </div>
+
+                    <div class="scheme-list-card glass-panel">
+                        <!-- Card header: title + search bar -->
+                        <div class="card-header" style="display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:18px;">
+                            <div>
+                                <h3 style="margin:0 0 4px;">Active Viewing Tiers</h3>
+                                <p class="text-secondary" style="margin:0;">Current property configuration schemes mapped in database.</p>
+                            </div>
+                            <div class="search-wrapper" style="display:flex; align-items:center; gap:8px; background:var(--field-bg); border:1px solid var(--glass-border); border-radius:12px; padding:0 12px; min-width:220px; max-width:300px; width:100%;">
+                                <i class="fa-solid fa-magnifying-glass" style="color:var(--text-muted); font-size:0.85rem; flex-shrink:0;"></i>
+                                <input
+                                    type="text"
+                                    id="schemes-search-input"
+                                    placeholder="Search schemes…"
+                                    oninput="filterSchemes()"
+                                    autocomplete="off"
+                                    style="background:transparent; border:none; outline:none; color:var(--text-primary); font-size:0.88rem; width:100%; padding:10px 0; font-family:inherit;"
+                                >
+                            </div>
+                        </div>
+
+                        <div class="table-container">
+                            <table class="glass-table">
+                                <thead>
+                                    <tr>
+                                        <th>Property Scheme</th>
+                                        <th>Address</th>
+                                        <th>Price Tag</th>
+                                        <th>Restrictions</th>
+                                        <th>Description</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="schemes-tbody">
+                                    <tr>
+                                        <td colspan="5" class="text-center py-3 text-muted">
+                                            <i class="fa-solid fa-circle-notch fa-spin"></i> Loading active schemes...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Pagination footer -->
+                        <div class="table-pagination">
+                            <span class="page-info" id="schemes-page-info"></span>
+                            <div class="page-controls" id="schemes-page-controls"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 6. LOCATION SECTION -->
+            <section id="location-section" class="app-section">
+                <div class="section-header text-center">
+                    <h2 class="section-title">Property <span class="gradient-text">Location</span></h2>
+                    <p class="section-subtitle">Stunning sunset cliffs of Bel Air, California. Accompanied travel
+                        arrangements are standard.</p>
+                </div>
+
+                <div class="location-container glass-panel">
+                    <div class="location-grid">
+                        <div class="location-map-mockup" style="position: relative; overflow: hidden; padding: 0;">
+                            <div id="visitor-map"
+                                style="width:100%; height:100%; min-height: 380px; border-radius:15px;">
+                            </div>
+                        </div>
+                        <div class="location-details">
+                            <h3>Estate Coordinates</h3>
+                            <p class="text-muted">A private gated road access reserved strictly for scheduled visitors.
+                                Helipad and security gate arrangements available upon demand.</p>
+
+                            <div class="coord-info">
+                                <div class="coord-item glass-panel">
+                                    <strong>Coordinates:</strong> <span>34.0736° N, 118.4007° W</span>
+                                </div>
+                                <div class="coord-item glass-panel">
+                                    <strong>Travel Time:</strong> <span>25 mins from LAX International Airport</span>
+                                </div>
+                                <div class="coord-item glass-panel">
+                                    <strong>Security Protocols:</strong> <span>Class-A pre-clearance required</span>
+                                </div>
+                            </div>
+
+                            <button class="btn-primary btn-glow" onclick="showSection('booking-section')">
+                                <i class="fa-solid fa-compass"></i> Reserve Tour Access Route
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 7. ADMIN TROUBLESHOOT SECTION -->
+            <section id="troubleshoot-section" class="app-section admin-only">
+                <div class="section-header text-center">
+                    <h2 class="section-title">System <span class="gradient-text">Troubleshoot</span></h2>
+                    <p class="section-subtitle">Diagnose backend connectivity, inspect live SQL queries, and resolve
+                        system issues in real-time.</p>
+                </div>
+
+                <div class="troubleshoot-status-row">
+                    <div class="ts-status-card glass-panel" id="ts-backend-card">
+                        <div class="ts-status-icon" id="ts-backend-icon"><i class="fa-solid fa-server"></i></div>
+                        <div class="ts-status-info">
+                            <h4>Backend Server</h4>
+                            <span class="ts-badge" id="ts-backend-badge">Checking...</span>
+                        </div>
+                    </div>
+
+                    <div class="ts-status-card glass-panel" id="ts-bookings-card">
+                        <div class="ts-status-icon" id="ts-bookings-icon"><i class="fa-solid fa-calendar-check"></i>
+                        </div>
+                        <div class="ts-status-info">
+                            <h4>Bookings API</h4>
+                            <span class="ts-badge" id="ts-bookings-badge">Checking...</span>
+                        </div>
+                    </div>
+                    <div class="ts-status-card glass-panel" id="ts-schemes-card">
+                        <div class="ts-status-icon" id="ts-schemes-icon"><i class="fa-solid fa-cubes"></i></div>
+                        <div class="ts-status-info">
+                            <h4>Schemes API</h4>
+                            <span class="ts-badge" id="ts-schemes-badge">Checking...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="troubleshoot-grid">
+
+
+                    <div class="ts-card glass-panel">
+                        <div class="ts-card-header">
+                            <h3><i class="fa-solid fa-triangle-exclamation icon-pink"></i> Error Log &amp; Fixes</h3>
+                            <button class="btn-ts-action" onclick="clearTsLog()">
+                                <i class="fa-solid fa-trash-can"></i> Clear
+                            </button>
+                        </div>
+                        <p class="text-secondary" style="margin-bottom:14px; font-size:0.85rem;">System errors and
+                            suggested resolutions appear here automatically.</p>
+
+                        <div class="ts-localstorage-notice">
+                            <i class="fa-solid fa-circle-info"></i>
+                            <div>
+                                <strong>Running in LocalStorage Mode — No real server required</strong>
+                                "Backend server unreachable" entries below are <em>expected</em> and not a real problem.
+                                The app automatically falls back to browser LocalStorage for all data storage.
+                                These entries only appear when no Node.js backend API is running at localhost.
+                                To silence them, start your backend with <code
+                                    style="background:rgba(255,255,255,0.08); padding:1px 5px; border-radius:4px;">npm run dev</code>.
+                            </div>
+                        </div>
+
+                        <div class="ts-error-log" id="ts-error-log">
+                            <div class="ts-log-empty">
+                                <i class="fa-solid fa-circle-check"
+                                    style="color: var(--accent-cyan); font-size:2rem; margin-bottom:10px;"></i>
+                                <p>No errors detected. System appears healthy.</p>
+                            </div>
+                        </div>
+
+                        <div class="ts-fix-actions">
+                            <h4 style="font-size:0.9rem; margin-bottom:10px; color:var(--text-secondary);"><i
+                                    class="fa-solid fa-wand-magic-sparkles"></i> Quick Fixes</h4>
+                            <div class="ts-fix-grid">
+                                <button class="btn-ts-fix" onclick="tsFixClearLocalStorage()">
+                                    <i class="fa-solid fa-broom"></i>
+                                    <span>Clear LocalStorage Cache</span>
+                                </button>
+                                <button class="btn-ts-fix" onclick="tsFixReseedData()">
+                                    <i class="fa-solid fa-seedling"></i>
+                                    <span>Reseed Mock Data</span>
+                                </button>
+                                <button class="btn-ts-fix" onclick="tsFixReconnect()">
+                                    <i class="fa-solid fa-plug-circle-bolt"></i>
+                                    <span>Reconnect to Backend</span>
+                                </button>
+                                <button class="btn-ts-fix" onclick="tsFixExportData()">
+                                    <i class="fa-solid fa-file-export"></i>
+                                    <span>Export Data as JSON</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="ts-sysinfo-card glass-panel">
+                    <div class="ts-card-header">
+                        <h3><i class="fa-solid fa-circle-info icon-violet"></i> System Information</h3>
+                    </div>
+                    <div class="ts-sysinfo-grid" id="ts-sysinfo-grid">
+                        <div class="ts-info-item">
+                            <span class="ts-info-label">Mode</span>
+                            <span class="ts-info-value" id="ts-info-mode">-</span>
+                        </div>
+                        <div class="ts-info-item">
+                            <span class="ts-info-label">Total Bookings</span>
+                            <span class="ts-info-value" id="ts-info-bookings">-</span>
+                        </div>
+                        <div class="ts-info-item">
+                            <span class="ts-info-label">Active Schemes</span>
+                            <span class="ts-info-value" id="ts-info-schemes">-</span>
+                        </div>
+                        <div class="ts-info-item">
+                            <span class="ts-info-label">LocalStorage Used</span>
+                            <span class="ts-info-value" id="ts-info-ls">-</span>
+                        </div>
+                        <div class="ts-info-item">
+                            <span class="ts-info-label">Browser</span>
+                            <span class="ts-info-value" id="ts-info-browser">-</span>
+                        </div>
+                        <div class="ts-info-item">
+                            <span class="ts-info-label">Last Sync</span>
+                            <span class="ts-info-value" id="ts-info-sync">-</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+
+        <!-- RESCHEDULE DIALOG (MODAL) -->
+        <div class="modal-backdrop" id="reschedule-modal">
+            <div class="modal-card glass-panel">
+                <div class="modal-header">
+                    <h3><i class="fa-solid fa-clock icon-cyan"></i> Reschedule Private Tour</h3>
+                    <button class="btn-close" onclick="closeRescheduleModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="reschedule-booking-id">
+                    <div class="form-group">
+                        <label for="reschedule-date">Select New Date <span class="required">*</span></label>
+                        <input type="date" id="reschedule-date" class="glass-input" required
+                            onchange="onRescheduleDateChange()">
+                    </div>
+                    <div class="form-group">
+                        <label>Select New Time Slot <span class="required">*</span></label>
+                        <div class="time-slots-grid" id="reschedule-slots-container"></div>
+                        <input type="hidden" id="reschedule-selected-time" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-secondary" onclick="closeRescheduleModal()">Cancel</button>
+                    <button class="btn-primary btn-glow" id="btn-confirm-reschedule"
+                        onclick="submitReschedule()">Confirm Reschedule</button>
+                </div>
+            </div>
+        </div>
+
+
+
+        <!-- TOAST NOTIFICATIONS MANAGER -->
+        <div id="toast-container" class="toast-container"></div>
+
+    </div><!-- /#app-wrapper -->
+
+    <!-- Original app scripts -->
+    <script src="app.js"></script>
+
+    <!-- ══════════════════════════════════════════════════
+         RBAC SYSTEM — Role-Based Access Control Logic
+         
+         CHANGES FROM PREVIOUS VERSION:
+           ✅ doLogin() now calls POST /api/login (real backend)
+           ✅ Falls back to localStorage demo mode if backend unreachable
+           ✅ Role is returned from DB, not trusted from UI tile alone
+           ✅ Login hints updated to show real credentials
+           ✅ All other RBAC logic (applyRoleAccess, session restore,
+              doLogout, applyRoleAccess) unchanged
+         
+         BACKEND CREDENTIALS (MySQL):
+           admin@opennest.com    / admin123   → admin
+           manager@opennest.com  / manager123 → manager
+           agent@opennest.com    / agent123   → agent
+           visitor@opennest.com  / visitor123 → visitor
+    ══════════════════════════════════════════════════ -->
+    <script>
+        /* ── RBAC CONFIGURATION ─────────────────────────────────── */
+        var RBAC_PERMISSIONS = {
+            visitor: {
+                nav: ['hero-section', 'booking-section', 'visitor-rules-section', 'location-section'],
+                theme: 'dark-theme',
+                themeClass: '',
+                label: 'Visitor',
+                badgeClass: 'badge-visitor',
+                icon: 'fa-user'
+            },
+            admin: {
+                nav: ['hero-section', 'booking-section', 'visitor-rules-section',
+                    'dashboard-section', 'admin-schemes-section', 'troubleshoot-section', 'location-section'],
+                theme: 'dark-theme',
+                themeClass: '',
+                label: 'Admin',
+                badgeClass: 'badge-admin',
+                icon: 'fa-user-shield'
+            },
+            manager: {
+                nav: ['hero-section', 'dashboard-section', 'location-section'],
+                theme: 'dark-theme',
+                themeClass: 'theme-manager',
+                label: 'Manager',
+                badgeClass: 'badge-manager',
+                icon: 'fa-chart-line'
+            },
+            agent: {
+                nav: ['hero-section', 'booking-section', 'location-section'],
+                theme: 'dark-theme',
+                themeClass: 'theme-agent',
+                label: 'Agent',
+                badgeClass: 'badge-agent',
+                icon: 'fa-briefcase'
+            }
+        };
+
+        /* ── SESSION STORAGE KEY ─────────────────────────────────── */
+        var SESSION_KEY = 'opennest_session';
+
+        /* ── LOGIN ROLE SELECTOR STATE ───────────────────────────── */
+        var _selectedLoginRole = null;
+
+        function selectLoginRole(tile) {
+            document.querySelectorAll('.role-tile').forEach(function (t) {
+                t.classList.remove('selected', 'selected-cyan');
+            });
+
+            var role = tile.getAttribute('data-role');
+            if (role === 'visitor' || role === 'agent' || role === 'manager') {
+                tile.classList.add('selected-cyan');
+            } else {
+                tile.classList.add('selected');
+            }
+            _selectedLoginRole = role;
+            hideLoginError();
+
+            if (role === 'visitor') {
+                doLogin();
+                return;
+            }
+
+            var credSection = document.getElementById('login-credentials-section');
+            if (credSection) {
+                if (role === 'admin') {
+                    credSection.style.display = 'block';
+                } else {
+                    credSection.style.display = 'none';
+                }
+            }
+        }
+
+        function showLoginError(msg) {
+            var el = document.getElementById('login-error-msg');
+            document.getElementById('login-error-text').textContent = msg;
+            el.classList.add('visible');
+        }
+
+        function hideLoginError() {
+            document.getElementById('login-error-msg').classList.remove('visible');
+        }
+
+        /* ── MAIN LOGIN HANDLER (REAL BACKEND API) ────────────────
+         
+           Flow:
+             1. Validate UI inputs
+             2. POST /api/login with { email, password }
+             3. On success → role comes from DB via server response
+             4. If backend unreachable → fallback to demo mode
+                (so app still works during development without backend)
+        ──────────────────────────────────────────────────────────── */
+        function doLogin() {
+            if (!_selectedLoginRole) {
+                showLoginError('Please select a role before continuing.');
+                return;
+            }
+
+            if (_selectedLoginRole === 'visitor') {
+                var session = {
+                    role: 'visitor',
+                    email: 'visitor@opennest.com',
+                    name: 'Visitor',
+                    ts: Date.now(),
+                    demo: true
+                };
+
+                try {
+                    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+                } catch (e) { }
+
+                applyRoleAccess('visitor');
+                revealApp();
+                setTimeout(function () {
+                    if (typeof window.showSection === 'function') {
+                        window.showSection('booking-section');
+                    }
+                }, 500);
+                return;
+            }
+
+            var email = (document.getElementById('login-email').value || '').trim();
+            var password = (document.getElementById('login-password').value || '').trim();
+
+            if (!email) {
+                showLoginError('Please enter your email address.');
+                return;
+            }
+            if (password.length < 3) {
+                showLoginError('Password must be at least 3 characters.');
+                return;
+            }
+
+            /* Button loading state */
+            var btn = document.getElementById('btn-login-submit');
+            btn.classList.add('loading');
+            btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>&nbsp; Signing in...';
+
+            /* ── REAL BACKEND API CALL ── */
+            fetch('/api/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ email: email, password: password })
+            })
+                .then(function (res) { return res.json(); })
+                .then(function (data) {
+
+                    btn.classList.remove('loading');
+                    btn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i>&nbsp; Sign In &amp; Enter Portal';
+
+                    /* Backend returned an error (wrong credentials) */
+                    if (data.error) {
+                        showLoginError("you can't connect");
+                        return;
+                    }
+
+                    /* ── SUCCESS: role is returned from MySQL via server ── */
+                    var session = {
+                        role: data.user.role,
+                        email: data.user.email,
+                        name: data.user.name,
+                        id: data.user.id,
+                        ts: Date.now()
+                    };
+
+                    try {
+                        localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+                    } catch (e) { /* localStorage unavailable — session in memory only */ }
+
+                    applyRoleAccess(data.user.role);
+                    revealApp();
+                })
+                .catch(function (err) {
+
+                    /* ── FALLBACK: backend not running → demo/dev mode ──
+                       In a production deployment this catch block should
+                       show an error instead of falling back. For local
+                       development it is convenient to keep the app usable
+                       even when the Express server is not started yet.
+                    ─────────────────────────────────────────────────── */
+                    console.warn('[OpenNest] /api/login unreachable — using frontend demo mode.', err);
+
+                    btn.classList.remove('loading');
+                    btn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i>&nbsp; Sign In &amp; Enter Portal';
+
+                    if (_selectedLoginRole === 'admin' && (email !== 'admin@opennest.com' || password !== 'admin123')) {
+                        showLoginError("you can't connect");
+                        return;
+                    }
+
+                    /* Use the role selected in the UI as fallback */
+                    var session = {
+                        role: _selectedLoginRole,
+                        email: email,
+                        name: email.split('@')[0],
+                        ts: Date.now(),
+                        demo: true          /* flag: not verified by backend */
+                    };
+
+                    try {
+                        localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+                    } catch (e) { }
+
+                    applyRoleAccess(_selectedLoginRole);
+                    revealApp();
+                });
+        }
+
+        /* ── REVEAL APP & HIDE LOGIN ──────────────────────────────── */
+        function revealApp() {
+            var loginScreen = document.getElementById('login-screen');
+            var appWrapper = document.getElementById('app-wrapper');
+
+            loginScreen.style.transition = 'opacity 0.4s ease';
+            loginScreen.style.opacity = '0';
+            loginScreen.style.pointerEvents = 'none';
+
+            setTimeout(function () {
+                loginScreen.style.display = 'none';
+                appWrapper.classList.add('logged-in');
+            }, 420);
+        }
+
+        /* ── APPLY ROLE ACCESS (RBAC CORE) ───────────────────────── */
+        function applyRoleAccess(role) {
+            var config = RBAC_PERMISSIONS[role] || RBAC_PERMISSIONS['visitor'];
+
+            /* 1. Theme */
+            document.body.classList.remove('theme-manager', 'theme-agent');
+            if (config.themeClass) {
+                document.body.classList.add(config.themeClass);
+            }
+
+            /* 2. Nav link visibility */
+            document.querySelectorAll('nav .nav-link[data-target]').forEach(function (link) {
+                var target = link.getAttribute('data-target');
+                link.style.display = config.nav.indexOf(target) !== -1 ? '' : 'none';
+            });
+
+            /* 3. Sync existing admin-only / visitor-only class system */
+            var isAdmin = (role === 'admin');
+            var isVisitor = (role === 'visitor' || role === 'agent');
+
+            document.querySelectorAll('.admin-only[data-target]').forEach(function (el) {
+                el.style.display = isAdmin ? '' : 'none';
+            });
+
+            document.querySelectorAll('.visitor-only').forEach(function (el) {
+                el.style.display = isVisitor ? '' : 'none';
+            });
+
+            /* Manager gets dashboard link */
+            if (role === 'manager') {
+                var dashLink = document.getElementById('nav-dashboard-link');
+                if (dashLink) dashLink.style.display = '';
+            }
+
+            /* 4. Role badge in nav */
+            var badge = document.getElementById('nav-role-badge');
+            if (badge) {
+                badge.className = 'role-badge ' + config.badgeClass;
+                badge.innerHTML = '<i class="fa-solid ' + config.icon + '"></i> ' + config.label;
+                badge.style.display = 'inline-flex';
+            }
+
+            /* Logout button */
+            var logoutBtn = document.getElementById('btn-logout');
+            if (logoutBtn) logoutBtn.style.display = '';
+
+            /* 5. Sync role-selector dropdown */
+            var roleSelectorContainer = document.getElementById('role-selector-container');
+            if (roleSelectorContainer) {
+                roleSelectorContainer.style.display = isAdmin ? '' : 'none';
+            }
+
+            /* Keep app.js switchRole() in sync */
+            if (typeof window.switchRole === 'function') {
+                var appRole = isAdmin ? 'admin' : 'visitor';
+                window.switchRole(appRole);
+            }
+
+            /* Navigate to first permitted section */
+            var firstSection = config.nav[0] || 'hero-section';
+            if (typeof window.showSection === 'function') {
+                window.showSection(firstSection);
+            }
+        }
+
+        /* ── LOGOUT ───────────────────────────────────────────────── */
+        function doLogout() {
+            try { localStorage.removeItem(SESSION_KEY); } catch (e) { }
+            location.reload();
+        }
+
+        /* ── AUTO-RESTORE SESSION ON PAGE LOAD ───────────────────── */
+        (function restoreSession() {
+            var raw = null;
+            try { raw = localStorage.getItem(SESSION_KEY); } catch (e) { }
+
+            if (!raw) return;
+
+            var session = null;
+            try { session = JSON.parse(raw); } catch (e) { }
+
+            if (!session || !session.role) return;
+
+            _selectedLoginRole = session.role;
+            applyRoleAccess(session.role);
+            revealApp();
+        })();
+
+        /* ══════════════════════════════════════════════════
+             POST-LOAD FIXES (original — unchanged)
+        ══════════════════════════════════════════════════ */
+        (function () {
+
+
+
+            var errorLog = document.getElementById('ts-error-log');
+            if (errorLog && window.MutationObserver) {
+                var _lastMessages = {};
+
+                new MutationObserver(function (mutations) {
+                    mutations.forEach(function (m) {
+                        m.addedNodes.forEach(function (node) {
+                            if (node.nodeType !== 1) return;
+
+                            var msgEl = node.querySelector
+                                ? (node.querySelector('.ts-log-title') ||
+                                    node.querySelector('strong') ||
+                                    node.querySelector('h4') ||
+                                    node)
+                                : node;
+                            var msg = (msgEl.textContent || '').trim().slice(0, 80);
+
+                            if (!msg) return;
+
+                            var now = Date.now();
+                            var last = _lastMessages[msg] || 0;
+
+                            if (now - last < 30000) {
+                                node.parentNode && node.parentNode.removeChild(node);
+                            } else {
+                                _lastMessages[msg] = now;
+                            }
+                        });
+                    });
+                }).observe(errorLog, { childList: true });
+            }
+
+            /* Booking success map initialisation (original) */
+            var _successMapInstance = null;
+
+            function initSuccessMap() {
+                var container = document.getElementById('booking-success-map');
+                if (!container) return;
+                if (_successMapInstance) {
+                    _successMapInstance.invalidateSize();
+                    return;
+                }
+                setTimeout(function () {
+                    try {
+                        _successMapInstance = L.map('booking-success-map', {
+                            zoomControl: true,
+                            scrollWheelZoom: false,
+                            attributionControl: true
+                        });
+                        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                            maxZoom: 19
+                        }).addTo(_successMapInstance);
+                        _successMapInstance.setView([34.0736, -118.4007], 15);
+
+                        var estateIcon = L.divIcon({
+                            className: '',
+                            html: '<div style="background:linear-gradient(135deg,#8B5CF6,#06B6D4);width:36px;height:36px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:3px solid #fff;box-shadow:0 2px 10px rgba(0,0,0,0.4);"></div>',
+                            iconSize: [36, 36],
+                            iconAnchor: [18, 36],
+                            popupAnchor: [0, -40]
+                        });
+                        L.marker([34.0736, -118.4007], { icon: estateIcon })
+                            .addTo(_successMapInstance)
+                            .bindPopup(
+                                '<div style="text-align:center;padding:4px 6px;">' +
+                                '<strong style="display:block;margin-bottom:4px;">&#127968; Open Nest Estate</strong>' +
+                                '<span style="font-size:0.8rem;color:#666;">Bel Air, Los Angeles, CA</span><br>' +
+                                '<span style="font-size:0.75rem;color:#999;">Gated — accompanied access only</span>' +
+                                '</div>'
+                            )
+                            .openPopup();
+                    } catch (e) {
+                        console.warn('Booking success map init failed:', e);
+                    }
+                }, 350);
+            }
+
+            var successStep = document.getElementById('booking-step-success');
+            if (successStep && window.MutationObserver) {
+                new MutationObserver(function (mutations) {
+                    mutations.forEach(function (m) {
+                        if (m.attributeName === 'class' &&
+                            m.target.classList.contains('active')) {
+                            initSuccessMap();
+                        }
+                    });
+                }).observe(successStep, { attributes: true });
+            }
+            window.initBookingSuccessMap = initSuccessMap;
+
+        })();
+    </script>
+</body>
+
+</html>

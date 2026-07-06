@@ -1,0 +1,71 @@
+[
+  {
+    "id": 1,
+    "name": "Open Nest",
+    "price": "$18.5 Million",
+    "viewing_rules": "Pre-cleared VIPs only",
+    "description": "Our flagship 14,200 sq ft smart tech architectural mansion in Bel Air cliffs."
+  },
+  {
+    "id": 2,
+    "name": "Sunset Cliffs Estate",
+    "price": "$12.4 Million",
+    "viewing_rules": "Prior identification required",
+    "description": "Breathtaking oceanfront estate featuring a private heated glass-bottom infinity pool."
+  },
+  {
+    "id": 3,
+    "name": "Horizon Penthouse Suite",
+    "price": "$6.9 Million",
+    "viewing_rules": "Accompanied agents only",
+    "description": "Sleek, high-elevation sky penthouse with modern automation and floor-to-ceiling glass."
+  },
+  {
+    "id": 4,
+    "name": "Sakar onyx",
+    "address": "Near vadodara",
+    "price": "Call Agent",
+    "viewing_rules": "Good Area",
+    "description": "No i dont have Desctiption"
+  },
+  {
+    "id": 5,
+    "name": "Emerald Heights Residency",
+    "address": "Vasna Road, Vadodara",
+    "price": "₹6.8 Million",
+    "viewing_rules": "Family visitors only",
+    "description": "Premium residential apartments with landscaped gardens and clubhouse facilities"
+  },
+  {
+    "id": 6,
+    "name": "Silver Oak Residency",
+    "address": "Vasna Road, Vadodara",
+    "price": "₹6.8 Million",
+    "viewing_rules": "Family visitors only",
+    "description": "Premium residential apartments with landscaped gardens and clubhouse facilities"
+  },
+  {
+    "id": 7,
+    "name": "Lakeview Signature Homes",
+    "address": "Harni Lake Road, Vadodara",
+    "price": "Call Agent",
+    "viewing_rules": "VIP viewing only",
+    "description": "Exclusive waterfront residences offering luxury amenities and premium finishes."
+  },
+  {
+    "id": 8,
+    "name": "Skyline Grand Towers",
+    "address": "Akshar Chowk, Vadodara",
+    "price": "₹11.9 Million",
+    "viewing_rules": "Pre-approved visitors only",
+    "description": "High-rise premium residences with panoramic city views and smart home features."
+  },
+  {
+    "id": 9,
+    "name": "Royal Crest Villas",
+    "address": "Gotri, Vadodara",
+    "price": "₹8.2 Million",
+    "viewing_rules": "Weekend viewing only",
+    "description": "Modern apartments with rooftop amenities and fitness center access."
+  }
+]
