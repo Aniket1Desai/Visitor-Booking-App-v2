@@ -1,10 +1,7 @@
 /**
  * Core Front-End Web Application Logic
- * FIXES:
- * 1. refreshSchemes() guards against undefined/null schemesRes.data
- * 2. All renderSchemesTable() fields use safe || fallbacks
- * 3. populateSchemesDropdown() called immediately after allSchemes is set
- * 4. showSection('booking-section') always refreshes schemes dropdown
+ * Data source: SharePoint Lists via Node.js/Express → Power Automate HTTP flows.
+ * All CRUD operations go through the backend API; no local storage fallback.
  */
 
 let currentStep = 1;
@@ -24,8 +21,6 @@ const timeSlots = [
 ];
 
 let allBookings = [];
-let isStandaloneMode = false;
-let apiBaseUrl = '';
 let currentRole = 'visitor';
 let allSchemes = [];
 let schemesCurrentPage = 1;
@@ -38,7 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initDatePickers();
     initTheme();
     initRole();
-    detectEngineModeAndLoad();
+    loadInitialData();
     setupNavigationListeners();
     setupScrollEffects();
     setupRoleDropdownCloseListener();
@@ -71,31 +66,10 @@ function initDatePickers() {
     }
 }
 
-async function detectEngineModeAndLoad() {
-    try {
-        const res = await fetch('/api/stats');
-        if (res.ok) {
-            isStandaloneMode = false;
-        } else {
-            throw new Error("Server returned error status");
-        }
-    } catch (err) {
-        isStandaloneMode = true;
-
-        if (!localStorage.getItem('mock_bookings')) {
-            localStorage.setItem('mock_bookings', JSON.stringify(getMockSeedData()));
-        }
-        if (!localStorage.getItem('mock_schemes')) {
-            localStorage.setItem('mock_schemes', JSON.stringify(getMockSchemesSeedData()));
-        }
-    }
-
+async function loadInitialData() {
     await refreshData();
     renderTimeSlots('booking_date', 'slots-container', 'selected_time');
 }
-
-function getMockSeedData() { return []; }
-function getMockSchemesSeedData() { return []; }
 
 function getOffsetDateString(days) {
     const d = new Date();
@@ -293,43 +267,17 @@ function updateStepUI() {
 
 async function refreshData() {
     try {
-        let bookingsRes, statsRes;
-
         await refreshSchemes();
 
-        if (!isStandaloneMode) {
-            const bRes = await fetch('/api/bookings');
-            bookingsRes = await bRes.json();
+        const [bRes, sRes] = await Promise.all([
+            fetch('/api/bookings'),
+            fetch('/api/stats')
+        ]);
 
-            const sRes = await fetch('/api/stats');
-            statsRes = await sRes.json();
+        const bookingsRes = await bRes.json();
+        const statsRes = await sRes.json();
 
-            allBookings = bookingsRes.data;
-        } else {
-            const mockBookings = JSON.parse(localStorage.getItem('mock_bookings') || '[]');
-
-            mockBookings.sort((a, b) => {
-                if (a.booking_date !== b.booking_date) {
-                    return b.booking_date.localeCompare(a.booking_date);
-                }
-                return a.booking_time.localeCompare(b.booking_time);
-            });
-            allBookings = mockBookings;
-
-            const todayStr = new Date().toISOString().split('T')[0];
-            const activeTours = mockBookings.filter(b => b.booking_date >= todayStr && b.status !== 'Cancelled').length;
-            const cancelledCount = mockBookings.filter(b => b.status === 'Cancelled').length;
-            const visitorTotal = mockBookings.reduce((acc, curr) => acc + (curr.visitor_count || 0), 0);
-
-            statsRes = {
-                stats: {
-                    totalBookings: mockBookings.length,
-                    totalVisitors: visitorTotal,
-                    upcomingTours: activeTours,
-                    cancelledBookings: cancelledCount
-                }
-            };
-        }
+        allBookings = bookingsRes.data || [];
 
         document.getElementById('stat-total-bookings').textContent = statsRes.stats.totalBookings;
         document.getElementById('stat-total-visitors').textContent = statsRes.stats.totalVisitors;
@@ -340,7 +288,7 @@ async function refreshData() {
 
     } catch (err) {
         console.error('Refresh operations failed', err);
-        showToast("Sync Error", "Failed to retrieve live bookings information.", "error");
+        showToast("Sync Error", "Unable to load the latest data. Please try again.", "error");
     }
 }
 
@@ -350,57 +298,22 @@ async function submitBooking() {
     btnSubmit.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Submitting...`;
 
     try {
-        let result;
-        if (!isStandaloneMode) {
-            const response = await fetch('/api/bookings', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(bookingData)
-            });
+        const response = await fetch('/api/bookings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(bookingData)
+        });
 
-            if (response.status === 409) throw new Error("This date and time slot is already booked.");
-            if (!response.ok) throw new Error("Server submission error");
-            result = await response.json();
-        } else {
-            const mockBookings = JSON.parse(localStorage.getItem('mock_bookings') || '[]');
-            const isConflict = mockBookings.some(b =>
-                b.booking_date === bookingData.booking_date &&
-                b.booking_time === bookingData.booking_time &&
-                b.status !== 'Cancelled'
-            );
+        if (response.status === 409) throw new Error("This date and time slot is already booked.");
+        if (!response.ok) throw new Error("Server submission error");
 
-            if (isConflict) throw new Error("This date and time slot is already booked.");
-
-            const nextId = mockBookings.length > 0 ? Math.max(...mockBookings.map(b => b.id)) + 1 : 1;
-            const newRecord = {
-                id: nextId,
-                ...bookingData,
-                status: 'Confirmed',
-                created_at: new Date().toISOString()
-            };
-
-            mockBookings.push(newRecord);
-            localStorage.setItem('mock_bookings', JSON.stringify(mockBookings));
-
-            result = {
-                booking: newRecord
-            };
-        }
-
-        document.getElementById('success-date-time').textContent = `${formatDate(bookingData.booking_date)} at ${bookingData.booking_time}`;
+        document.getElementById('success-date-time').textContent =
+            `${formatDate(bookingData.booking_date)} at ${bookingData.booking_time}`;
         currentStep = 'success';
         updateStepUI();
-        showToast("Booking Successful", "Viewing tour successfully reserved.", "success");
+        showToast("Booking Successful", "Your viewing tour has been booked successfully.", "success");
 
-        allBookings.push(result.booking);
-        refreshData();
-        // Sync new booking to SharePoint
-        try {
-            await fetch('/api/sync/bookings', { method: 'POST' });
-            showToast("SharePoint Synced", "Booking synced to SharePoint successfully.", "success");
-        } catch (syncErr) {
-            console.warn("SharePoint sync failed:", syncErr.message);
-        }
+        await refreshData();
 
     } catch (err) {
         showToast("Booking Failed", err.message, "error");
@@ -437,44 +350,18 @@ async function submitReschedule() {
     btnRes.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Processing...`;
 
     try {
-        let result;
-        if (!isStandaloneMode) {
-            const response = await fetch(`/api/bookings/${bookingId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ booking_date: newDate, booking_time: newTime })
-            });
+        const response = await fetch(`/api/bookings/${bookingId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ booking_date: newDate, booking_time: newTime })
+        });
 
-            if (response.status === 409) throw new Error("The selected new time slot is already booked.");
-            if (!response.ok) throw new Error("Failed to reschedule viewing on server.");
-            result = await response.json();
-        } else {
-            const mockBookings = JSON.parse(localStorage.getItem('mock_bookings') || '[]');
-            const isConflict = mockBookings.some(b =>
-                b.booking_date === newDate &&
-                b.booking_time === newTime &&
-                b.id !== parseInt(bookingId) &&
-                b.status !== 'Cancelled'
-            );
-
-            if (isConflict) throw new Error("The selected new time slot is already booked.");
-
-            const recordIdx = mockBookings.findIndex(b => b.id === parseInt(bookingId));
-            if (recordIdx === -1) throw new Error("Booking record not found.");
-
-            mockBookings[recordIdx].booking_date = newDate;
-            mockBookings[recordIdx].booking_time = newTime;
-            mockBookings[recordIdx].status = 'Rescheduled';
-            localStorage.setItem('mock_bookings', JSON.stringify(mockBookings));
-
-            result = {
-                booking: mockBookings[recordIdx]
-            };
-        }
+        if (response.status === 409) throw new Error("The selected new time slot is already booked.");
+        if (!response.ok) throw new Error("Failed to reschedule viewing on server.");
 
         closeRescheduleModal();
-        showToast("Tour Rescheduled", `Rescheduled successfully to ${formatDate(newDate)} at ${newTime}.`, "success");
-        refreshData();
+        showToast("Tour Rescheduled", `Rescheduled to ${formatDate(newDate)} at ${newTime}.`, "success");
+        await refreshData();
 
     } catch (err) {
         showToast("Reschedule Failed", err.message, "error");
@@ -488,26 +375,11 @@ async function cancelBooking(id, name) {
     if (!confirm(`Are you sure you want to cancel the viewing tour scheduled for ${name}?`)) return;
 
     try {
-        let result;
-        if (!isStandaloneMode) {
-            const response = await fetch(`/api/bookings/${id}`, { method: 'DELETE' });
-            if (!response.ok) throw new Error("Server cancellation request failed.");
-            result = await response.json();
-        } else {
-            const mockBookings = JSON.parse(localStorage.getItem('mock_bookings') || '[]');
-            const recordIdx = mockBookings.findIndex(b => b.id === parseInt(id));
-            if (recordIdx === -1) throw new Error("Record not found.");
+        const response = await fetch(`/api/bookings/${id}`, { method: 'DELETE' });
+        if (!response.ok) throw new Error("Server cancellation request failed.");
 
-            mockBookings[recordIdx].status = 'Cancelled';
-            localStorage.setItem('mock_bookings', JSON.stringify(mockBookings));
-
-            result = {
-                booking: mockBookings[recordIdx]
-            };
-        }
-
-        showToast("Tour Cancelled", `Viewing tour for ${name} has been soft-cancelled.`, "info-theme");
-        refreshData();
+        showToast("Tour Cancelled", `Viewing tour for ${name} has been cancelled successfully.`, "info-theme");
+        await refreshData();
 
     } catch (err) {
         showToast("Cancellation Failed", err.message, "error");
@@ -773,20 +645,14 @@ function applyRoleVisibility() {
 // -------------------------------------------------------------
 async function refreshSchemes() {
     try {
-        if (!isStandaloneMode) {
-            const res = await fetch('/api/schemes');
+        const res = await fetch('/api/schemes');
+        const schemesRes = await res.json();
 
-            const schemesRes = await res.json();
-
-            allSchemes = Array.isArray(schemesRes.data) ? schemesRes.data : [];
-
-            if (!res.ok) {
-                console.warn('GET /api/schemes returned', res.status, '— details:', schemesRes.details || schemesRes.error);
-            }
-        } else {
-            const mockSchemes = JSON.parse(localStorage.getItem('mock_schemes') || '[]');
-            allSchemes = mockSchemes;
+        if (!res.ok) {
+            console.warn('GET /api/schemes returned', res.status, '— details:', schemesRes.details || schemesRes.error);
         }
+
+        allSchemes = Array.isArray(schemesRes.data) ? schemesRes.data : [];
 
         populateSchemesDropdown();
         renderSchemesTable();
@@ -796,7 +662,7 @@ async function refreshSchemes() {
         allSchemes = [];
         populateSchemesDropdown();
         renderSchemesTable();
-        showToast("Schemes Sync Error", "Failed to retrieve active villa schemes from database.", "error");
+        showToast("Unable to Load Schemes", "Unable to load property schemes. Please try again.", "error");
     }
 }
 
@@ -956,45 +822,19 @@ async function submitScheme(e) {
     btnSubmit.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Registering...`;
 
     try {
-        let result;
-        if (!isStandaloneMode) {
-            const response = await fetch('/api/schemes', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, address, price, viewing_rules, description })
-            });
+        const response = await fetch('/api/schemes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, address, price, viewing_rules, description })
+        });
 
-            if (response.status === 409) throw new Error("A scheme with this property name already exists.");
-            if (!response.ok) throw new Error("Server rejected property scheme insertion.");
-            result = await response.json();
-        } else {
-            const mockSchemes = JSON.parse(localStorage.getItem('mock_schemes') || '[]');
-            const isConflict = mockSchemes.some(s => s.name.toLowerCase() === name.toLowerCase());
+        if (response.status === 409) throw new Error("A scheme with this property name already exists.");
+        if (!response.ok) throw new Error("Server rejected property scheme insertion.");
 
-            if (isConflict) throw new Error("A scheme with this property name already exists.");
-
-            const nextId = mockSchemes.length > 0 ? Math.max(...mockSchemes.map(s => s.id)) + 1 : 1;
-            const newRecord = { id: nextId, name, address, price, viewing_rules, description };
-
-            mockSchemes.push(newRecord);
-            localStorage.setItem('mock_schemes', JSON.stringify(mockSchemes));
-
-            result = {
-                scheme: newRecord
-            };
-        }
-
-        showToast("Scheme Added", `Property "${name}" successfully registered in system.`, "success");
+        showToast("Scheme Added", `Property "${name}" has been added successfully.`, "success");
         document.getElementById('scheme-creation-form').reset();
 
         await refreshSchemes();
-        // Sync new scheme to SharePoint
-        try {
-            await fetch('/api/sync/schemes', { method: 'POST' });
-            showToast("SharePoint Synced", "Scheme synced to SharePoint successfully.", "success");
-        } catch (syncErr) {
-            console.warn("SharePoint sync failed:", syncErr.message);
-        }
 
     } catch (err) {
         showToast("Creation Failed", err.message, "error");
@@ -1058,42 +898,32 @@ async function runTroubleshootDiagnostic() {
         }
     } catch (e) {
         setTsStatus('backend', 'error', 'Offline / Unreachable');
-        tsLogError('Backend server unreachable', e.message, 'Try restarting the Node.js server with `npm run dev`. If offline, data is simulated via LocalStorage.');
+        tsLogError('Backend server unreachable', e.message, 'Try restarting the Node.js server with `npm start`. Verify POWER_AUTOMATE_BOOKINGS_URL and POWER_AUTOMATE_SCHEMES_URL are set in .env');
     }
 
     try {
-        if (!isStandaloneMode) {
-            const r = await fetch('/api/bookings');
-            if (r.ok) {
-                setTsStatus('bookings', 'ok', 'Responding');
-            } else {
-                throw new Error(`HTTP ${r.status}`);
-            }
+        const r = await fetch('/api/bookings');
+        if (r.ok) {
+            setTsStatus('bookings', 'ok', 'Responding');
         } else {
-            const mock = JSON.parse(localStorage.getItem('mock_bookings') || '[]');
-            setTsStatus('bookings', 'warn', `LocalStorage (${mock.length} records)`);
+            throw new Error(`HTTP ${r.status}`);
         }
     } catch (e) {
         setTsStatus('bookings', 'error', 'API Error');
-        tsLogError('/api/bookings failed', e.message, 'Check db.js getAllBookings() method and MySQL connection string in .env');
+        tsLogError('/api/bookings failed', e.message, 'Check that POWER_AUTOMATE_BOOKINGS_URL is set in .env and the flow supports action: "getAll"');
     }
 
     try {
-        if (!isStandaloneMode) {
-            const r = await fetch('/api/schemes');
-            const body = await r.json();
-            if (r.ok && Array.isArray(body.data)) {
-                setTsStatus('schemes', 'ok', `Responding (${body.data.length} schemes)`);
-            } else {
-                throw new Error(body.details || body.error || `HTTP ${r.status}`);
-            }
+        const r = await fetch('/api/schemes');
+        const body = await r.json();
+        if (r.ok && Array.isArray(body.data)) {
+            setTsStatus('schemes', 'ok', `Responding (${body.data.length} schemes)`);
         } else {
-            const mock = JSON.parse(localStorage.getItem('mock_schemes') || '[]');
-            setTsStatus('schemes', 'warn', `LocalStorage (${mock.length} schemes)`);
+            throw new Error(body.details || body.error || `HTTP ${r.status}`);
         }
     } catch (e) {
         setTsStatus('schemes', 'error', 'API Error');
-        tsLogError('/api/schemes failed', e.message, 'Check db.js getAllSchemes() and run: ALTER TABLE schemes ADD COLUMN address VARCHAR(250) NULL AFTER name; in MySQL if address column is missing.');
+        tsLogError('/api/schemes failed', e.message, 'Check that POWER_AUTOMATE_SCHEMES_URL is set in .env and the flow supports action: "getAll"');
     }
 
     updateTsSysInfo();
@@ -1163,7 +993,7 @@ function updateTsSysInfo() {
     const lsEl = document.getElementById('ts-info-ls');
     const browserEl = document.getElementById('ts-info-browser');
 
-    if (modeEl) modeEl.textContent = isStandaloneMode ? 'LocalStorage Simulator' : 'MySQL Server Backend';
+    if (modeEl) modeEl.textContent = 'SharePoint via Power Automate';
     if (bookingsEl) bookingsEl.textContent = allBookings.length;
     if (schemesEl) schemesEl.textContent = allSchemes.length;
 
@@ -1187,33 +1017,27 @@ function updateTsSysInfo() {
 }
 
 function tsFixClearLocalStorage() {
-    if (!confirm('This will delete all locally stored bookings and schemes. Continue?')) return;
-    localStorage.removeItem('mock_bookings');
-    localStorage.removeItem('mock_schemes');
     clearTsLog();
-    showToast('Cache Cleared', 'LocalStorage data removed. Reload to reseed.', 'success');
+    showToast('Log Cleared', 'Diagnostic log cleared.', 'success');
 }
 
 function tsFixReseedData() {
-    localStorage.setItem('mock_bookings', JSON.stringify(getMockSeedData()));
-    localStorage.setItem('mock_schemes', JSON.stringify(getMockSchemesSeedData()));
     refreshData();
-    showToast('Data Reseeded', 'Mock bookings and schemes have been restored to defaults.', 'success');
+    showToast('Data Refreshed', 'Fetching latest data from SharePoint.', 'success');
 }
 
 async function tsFixReconnect() {
     try {
         const res = await fetch('/api/stats');
         if (res.ok) {
-            isStandaloneMode = false;
-            showToast('Reconnected', 'Successfully connected to backend server.', 'success');
+            showToast('Connected', 'Backend server is reachable. Refreshing data from SharePoint.', 'success');
             refreshData();
         } else {
             throw new Error(`Server responded with HTTP ${res.status}`);
         }
     } catch (e) {
-        showToast('Reconnect Failed', 'Backend server still unreachable. Staying in offline mode.', 'error');
-        tsLogError('Reconnect attempt failed', e.message, 'Make sure the Node.js server is running: npm run dev');
+        showToast('Reconnect Failed', 'Backend server unreachable.', 'error');
+        tsLogError('Reconnect attempt failed', e.message, 'Make sure the Node.js server is running: npm start');
     }
     runTroubleshootDiagnostic();
 }
@@ -1221,7 +1045,7 @@ async function tsFixReconnect() {
 function tsFixExportData() {
     const exportData = {
         exportedAt: new Date().toISOString(),
-        mode: isStandaloneMode ? 'LocalStorage Simulator' : 'MySQL Server Backend',
+        mode: 'SharePoint via Power Automate',
         bookings: allBookings,
         schemes: allSchemes
     };

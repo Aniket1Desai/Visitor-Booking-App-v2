@@ -1,7 +1,7 @@
 {
   "name": "visitor-booking-app",
-  "version": "1.0.0",
-  "description": "Visitor booking app for home viewing tours with Glassmorphism UI and MySQL backend",
+  "version": "2.0.0",
+  "description": "Open Nest Visitor Booking App — SharePoint backend via Power Automate",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -10,9 +10,7 @@
     "axios": "^1.17.0",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
-    "express": "^4.19.2",
-    "mysql2": "^3.22.4",
-    "node-cron": "^4.2.1"
+    "express": "^4.19.2"
   },
   "author": "",
   "license": "ISC"

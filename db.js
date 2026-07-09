@@ -1,627 +1,329 @@
-const fs = require('fs');
-const path = require('path');
-const mysql = require('mysql2/promise');
+/**
+ * SharePoint Data Layer
+ *
+ * All CRUD operations are performed exclusively through Power Automate HTTP flows
+ * which write to / read from SharePoint lists. There is no local database,
+ * no JSON file storage, and no MySQL dependency.
+ *
+ * Flow contract (dispatcher pattern):
+ *   POST <FLOW_URL>  { action: "getAll" | "create" | "update" | "delete", id?, data? }
+ *
+ * The flow is expected to return already-renamed fields (via a Select action),
+ * i.e. { items: [ { id, name, ... } ] } for getAll, so this layer does not
+ * translate SharePoint column names.
+ *
+ * Bookings flow  → POWER_AUTOMATE_BOOKINGS_URL
+ * Schemes flow   → POWER_AUTOMATE_SCHEMES_URL
+ */
+
 require('dotenv').config();
+const axios = require('axios');
+const https = require('https');
 
-// Configuration for MySQL Server
-const dbConfig = {
-    host: process.env.DB_SERVER || 'localhost',
-    user: process.env.DB_USER || '',
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_DATABASE || '',
-    port: parseInt(process.env.DB_PORT) || 3306,
-    connectTimeout: 5000 // 5 seconds timeout to fail fast
-};
+// Bypass self-signed cert issues on Power Platform endpoints
+const httpsAgent = new https.Agent({ rejectUnauthorized: false });
 
-const JSON_DB_PATH = path.join(__dirname, 'bookings_db.json');
-const JSON_SCHEMES_PATH = path.join(__dirname, 'schemes_db.json');
+const BOOKINGS_URL = process.env.POWER_AUTOMATE_BOOKINGS_URL;
+const SCHEMES_URL = process.env.POWER_AUTOMATE_SCHEMES_URL;
 
-// Global engine state flags
-let useSqlDB = false;
-let sqlPool = null;
-
-// Initial high-quality mock bookings removed
-
-// Initial mock schemes removed
-
-function getOffsetDateString(days) {
-    const d = new Date();
-    d.setDate(d.getDate() + days);
-    return d.toISOString().split('T')[0];
-}
-
-// -------------------------------------------------------------
-// JSON Local Database Fallback Helpers
-// -------------------------------------------------------------
-function readJsonDb() {
-    if (!fs.existsSync(JSON_DB_PATH)) {
-        fs.writeFileSync(JSON_DB_PATH, JSON.stringify([], null, 2), 'utf-8');
-        return [];
-    }
-    try {
-        const data = fs.readFileSync(JSON_DB_PATH, 'utf-8');
-        return JSON.parse(data);
-    } catch (err) {
-        console.error('Error reading JSON bookings DB. Resetting it...', err);
-        return [];
-    }
-}
-
-function writeJsonDb(data) {
-    fs.writeFileSync(JSON_DB_PATH, JSON.stringify(data, null, 2), 'utf-8');
-}
-
-function readSchemesDb() {
-    if (!fs.existsSync(JSON_SCHEMES_PATH)) {
-        fs.writeFileSync(JSON_SCHEMES_PATH, JSON.stringify([], null, 2), 'utf-8');
-        return [];
-    }
-    try {
-        const data = fs.readFileSync(JSON_SCHEMES_PATH, 'utf-8');
-        return JSON.parse(data);
-    } catch (err) {
-        console.error('Error reading JSON schemes DB. Resetting it...', err);
-        return [];
-    }
-}
-
-function writeSchemesDb(data) {
-    fs.writeFileSync(JSON_SCHEMES_PATH, JSON.stringify(data, null, 2), 'utf-8');
-}
-
-// -------------------------------------------------------------
-// Initialize Database Connection Engine
-// -------------------------------------------------------------
-async function initializeDB() {
-    const hasCredentials = dbConfig.user && dbConfig.password && dbConfig.database;
-
-    if (!hasCredentials) {
-        console.log('\n======================================================');
-        console.log('⚠️  MYSQL ENVIRONMENT VARIABLES ARE NOT FULLY SET.');
-        console.log('👉 Running in [LOCAL JSON DATABASE MODE] (bookings_db.json / schemes_db.json)');
-        console.log('======================================================\n');
-        useSqlDB = false;
-        return;
+// ---------------------------------------------------------------------------
+// Internal helper — send a dispatcher request to a Power Automate flow
+// ---------------------------------------------------------------------------
+async function callFlow(flowUrl, flowName, payload) {
+    if (!flowUrl) {
+        throw new Error(`${flowName} is not configured in environment variables.`);
     }
 
     try {
-        console.log(`Connecting to MySQL Server at ${dbConfig.host}:${dbConfig.port}...`);
-        sqlPool = mysql.createPool({
-            host: dbConfig.host,
-            user: dbConfig.user,
-            password: dbConfig.password,
-            database: dbConfig.database,
-            port: dbConfig.port,
-            waitForConnections: true,
-            connectionLimit: 10,
-            queueLimit: 0
+        const response = await axios.post(flowUrl, payload, {
+            httpsAgent,
+            timeout: 30000
         });
-
-        // Test the connection
-        const connection = await sqlPool.getConnection();
-        connection.release();
-
-        useSqlDB = true;
-        console.log('\n======================================================');
-        console.log('⚡ SUCCESSFULLY CONNECTED TO MYSQL SERVER!');
-        console.log(`👉 Running in [MYSQL SERVER DATABASE MODE] (${dbConfig.database})`);
-        console.log('======================================================\n');
+        return response.data;
     } catch (err) {
-        console.log('\n======================================================');
-        console.log('❌ FAILED TO CONNECT TO MYSQL SERVER:');
-        console.log(`   Error: ${err.message}`);
-        console.log('👉 Falling back to [LOCAL JSON DATABASE MODE] (bookings_db.json / schemes_db.json)');
-        console.log('   All features will remain 100% active and simulated!');
-        console.log('======================================================\n');
-        useSqlDB = false;
-        sqlPool = null;
+        const detail = err.response
+            ? `HTTP ${err.response.status}: ${JSON.stringify(err.response.data)}`
+            : err.message;
+        console.error(`❌ SharePoint flow error (${flowName}):`, detail);
+        throw new Error(`SharePoint operation failed [${flowName}]: ${detail}`);
     }
 }
 
-// Run initial database setup
-initializeDB();
+// Some flows return their body as a JSON *string* rather than a real object.
+// Accept either: if we got a string, try to parse it before reading fields.
+function coerceBody(responseData) {
+    if (typeof responseData === 'string') {
+        try {
+            return JSON.parse(responseData);
+        } catch {
+            return {};
+        }
+    }
+    return responseData || {};
+}
 
-// -------------------------------------------------------------
-// Core Database CRUD Methods with Hybrid Execution
-// -------------------------------------------------------------
+// Normalise SharePoint item IDs — SP returns "ID" (uppercase) in some flows
+function normaliseItems(items) {
+    if (!Array.isArray(items)) return [];
+    return items.map(item => ({
+        ...item,
+        id: item.id ?? item.ID ?? item.Id
+    }));
+}
+
+// Pull the array out of whatever wrapper the flow used
+function extractItems(responseData) {
+    const body = coerceBody(responseData);
+    return normaliseItems(body.data ?? body.items ?? body.value ?? []);
+}
+
+// ---------------------------------------------------------------------------
+// BOOKINGS — CRUD
+// ---------------------------------------------------------------------------
 
 /**
- * Get all booking records
+ * Retrieve all booking records from SharePoint, sorted by date desc / time asc.
  */
 async function getAllBookings() {
-    if (useSqlDB) {
-        try {
-            const query = `
-                SELECT 
-                    id, 
-                    visitor_name, 
-                    visitor_email, 
-                    visitor_phone, 
-                    DATE_FORMAT(booking_date, '%Y-%m-%d') AS booking_date, 
-                    booking_time, 
-                    visitor_count, 
-                    scheme_name,
-                    special_requests, 
-                    status, 
-                    created_at 
-                FROM bookings 
-                ORDER BY booking_date DESC, booking_time ASC
-            `;
-            const [rows] = await sqlPool.query(query);
-            return {
-                data: rows,
-                sqlQuery: query.trim(),
-                engine: 'MySQL Server'
-            };
-        } catch (err) {
-            console.error('SQL query failed. Using JSON fallback.', err);
-            throw err;
-        }
-    }
-
-    // JSON Fallback / Simulation
-    const bookings = readJsonDb();
-    bookings.sort((a, b) => {
-        if (a.booking_date !== b.booking_date) {
-            return b.booking_date.localeCompare(a.booking_date);
-        }
-        return a.booking_time.localeCompare(b.booking_time);
+    const responseData = await callFlow(BOOKINGS_URL, 'POWER_AUTOMATE_BOOKINGS_URL', {
+        action: 'getAll'
     });
 
-    const simulatedQuery = `SELECT * FROM bookings ORDER BY booking_date DESC, booking_time ASC;`;
-    return {
-        data: bookings,
-        sqlQuery: simulatedQuery,
-        engine: 'Simulated JSON Database (SQL Fallback)'
-    };
+    const items = extractItems(responseData);
+
+    // Sort: newest date first, then earliest time within each date
+    items.sort((a, b) => {
+        if (a.booking_date !== b.booking_date) {
+            return (b.booking_date || '').localeCompare(a.booking_date || '');
+        }
+        return (a.booking_time || '').localeCompare(b.booking_time || '');
+    });
+
+    return { data: items };
 }
 
 /**
- * Create a new booking
+ * Create a new booking in SharePoint.
+ * Performs an in-memory conflict check against existing bookings first.
  */
 async function createBooking(data) {
-    const { visitor_name, visitor_email, visitor_phone, booking_date, booking_time, visitor_count, scheme_name, special_requests } = data;
+    const {
+        visitor_name, visitor_email, visitor_phone,
+        booking_date, booking_time,
+        visitor_count, scheme_name, special_requests
+    } = data;
+
     const vCount = parseInt(visitor_count) || 1;
 
-    if (useSqlDB) {
-        try {
-            // Check conflict
-            const conflictQuery = `
-                SELECT COUNT(*) as count 
-                FROM bookings 
-                WHERE booking_date = ? AND booking_time = ? AND status != 'Cancelled'
-            `;
-            const [conflictCheck] = await sqlPool.query(conflictQuery, [booking_date, booking_time]);
-
-            if (conflictCheck[0].count > 0) {
-                throw new Error('This date and time slot is already booked.');
-            }
-
-            const insertQuery = `
-                INSERT INTO bookings (visitor_name, visitor_email, visitor_phone, booking_date, booking_time, visitor_count, scheme_name, special_requests, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Confirmed')
-            `;
-
-            const [insertResult] = await sqlPool.query(insertQuery, [
-                visitor_name,
-                visitor_email,
-                visitor_phone,
-                booking_date,
-                booking_time,
-                vCount,
-                scheme_name,
-                special_requests || null
-            ]);
-
-            const insertId = insertResult.insertId;
-
-            // Retrieve inserted record
-            const selectQuery = `
-                SELECT 
-                    id, visitor_name, visitor_email, visitor_phone, 
-                    DATE_FORMAT(booking_date, '%Y-%m-%d') AS booking_date, booking_time, 
-                    visitor_count, scheme_name, special_requests, status, created_at
-                FROM bookings
-                WHERE id = ?
-            `;
-            const [fetchedRows] = await sqlPool.query(selectQuery, [insertId]);
-
-            const simulatedSql = `
-INSERT INTO bookings (visitor_name, visitor_email, visitor_phone, booking_date, booking_time, visitor_count, scheme_name, special_requests, status)
-VALUES ('${visitor_name}', '${visitor_email}', '${visitor_phone}', '${booking_date}', '${booking_time}', ${vCount}, '${scheme_name}', ${special_requests ? `'${special_requests}'` : 'NULL'}, 'Confirmed');
-            `.trim();
-
-            return {
-                booking: fetchedRows[0],
-                sqlQuery: simulatedSql,
-                engine: 'MySQL Server'
-            };
-        } catch (err) {
-            if (err.message.includes('already booked')) throw err;
-            console.error('SQL create failed. Using JSON fallback.', err);
-            throw err;
-        }
-    }
-
-    // JSON Fallback / Simulation
-    const bookings = readJsonDb();
-    const isConflict = bookings.some(b => b.booking_date === booking_date && b.booking_time === booking_time && b.status !== 'Cancelled');
-    if (isConflict) {
+    // Conflict check — fetch current bookings and verify slot availability
+    const { data: existing } = await getAllBookings();
+    const conflict = existing.some(b =>
+        b.booking_date === booking_date &&
+        b.booking_time === booking_time &&
+        b.status !== 'Cancelled'
+    );
+    if (conflict) {
         throw new Error('This date and time slot is already booked.');
     }
 
-    const newId = bookings.length > 0 ? Math.max(...bookings.map(b => b.id)) + 1 : 1;
-    const newBooking = {
-        id: newId,
-        visitor_name,
-        visitor_email,
-        visitor_phone,
-        booking_date,
-        booking_time,
-        visitor_count: vCount,
-        scheme_name,
-        special_requests: special_requests || '',
-        status: 'Confirmed',
-        created_at: new Date().toISOString()
-    };
+    const responseData = await callFlow(BOOKINGS_URL, 'POWER_AUTOMATE_BOOKINGS_URL', {
+        action: 'create',
+        data: {
+            visitor_name,
+            visitor_email,
+            visitor_phone,
+            booking_date,
+            booking_time,
+            visitor_count: vCount,
+            scheme_name,
+            special_requests: special_requests || '',
+            status: 'Confirmed'
+        }
+    });
 
-    bookings.push(newBooking);
-    writeJsonDb(bookings);
-
-    const simulatedSql = `
-INSERT INTO bookings (visitor_name, visitor_email, visitor_phone, booking_date, booking_time, visitor_count, scheme_name, special_requests, status)
-VALUES ('${visitor_name}', '${visitor_email}', '${visitor_phone}', '${booking_date}', '${booking_time}', ${vCount}, '${scheme_name}', ${special_requests ? `'${special_requests}'` : 'NULL'}, 'Confirmed');
-    `.trim();
-
-    return {
-        booking: newBooking,
-        sqlQuery: simulatedSql,
-        engine: 'Simulated JSON Database (SQL Fallback)'
-    };
+    const body = coerceBody(responseData);
+    const item = body.item ?? body;
+    return { booking: { ...item, id: item.id ?? item.ID ?? item.Id } };
 }
 
 /**
- * Reschedule an existing booking
+ * Reschedule an existing booking — updates date, time and sets status to Rescheduled.
  */
 async function rescheduleBooking(id, date, time) {
     const bookingId = parseInt(id);
 
-    if (useSqlDB) {
-        try {
-            // Check conflict for new time, excluding the current booking itself
-            const conflictQuery = `
-                SELECT COUNT(*) as count 
-                FROM bookings 
-                WHERE booking_date = ? AND booking_time = ? AND id != ? AND status != 'Cancelled'
-            `;
-            const [conflictCheck] = await sqlPool.query(conflictQuery, [date, time, bookingId]);
-
-            if (conflictCheck[0].count > 0) {
-                throw new Error('The selected new time slot is already booked.');
-            }
-
-            const updateQuery = `
-                UPDATE bookings 
-                SET booking_date = ?, booking_time = ?, status = 'Rescheduled'
-                WHERE id = ?
-            `;
-            await sqlPool.query(updateQuery, [date, time, bookingId]);
-
-            // Retrieve updated record
-            const selectQuery = `
-                SELECT 
-                    id, visitor_name, visitor_email, visitor_phone, 
-                    DATE_FORMAT(booking_date, '%Y-%m-%d') AS booking_date, booking_time, 
-                    visitor_count, scheme_name, special_requests, status, created_at
-                FROM bookings
-                WHERE id = ?
-            `;
-            const [fetchedRows] = await sqlPool.query(selectQuery, [bookingId]);
-
-            if (fetchedRows.length === 0) {
-                throw new Error('Booking not found.');
-            }
-
-            const simulatedSql = `
-UPDATE bookings 
-SET booking_date = '${date}', booking_time = '${time}', status = 'Rescheduled' 
-WHERE id = ${bookingId};
-            `.trim();
-
-            return {
-                booking: fetchedRows[0],
-                sqlQuery: simulatedSql,
-                engine: 'MySQL Server'
-            };
-        } catch (err) {
-            if (err.message.includes('already booked') || err.message.includes('not found')) throw err;
-            console.error('SQL reschedule failed. Using JSON fallback.', err);
-            throw err;
-        }
-    }
-
-    // JSON Fallback
-    const bookings = readJsonDb();
-    const isConflict = bookings.some(b => b.booking_date === date && b.booking_time === time && b.id !== bookingId && b.status !== 'Cancelled');
-    if (isConflict) {
+    // Conflict check — exclude the booking being rescheduled
+    const { data: existing } = await getAllBookings();
+    const conflict = existing.some(b =>
+        b.booking_date === date &&
+        b.booking_time === time &&
+        Number(b.id) !== bookingId &&
+        b.status !== 'Cancelled'
+    );
+    if (conflict) {
         throw new Error('The selected new time slot is already booked.');
     }
 
-    const bookingIndex = bookings.findIndex(b => b.id === bookingId);
-    if (bookingIndex === -1) {
+    const target = existing.find(b => Number(b.id) === bookingId);
+    if (!target) {
         throw new Error('Booking not found.');
     }
 
-    bookings[bookingIndex].booking_date = date;
-    bookings[bookingIndex].booking_time = time;
-    bookings[bookingIndex].status = 'Rescheduled';
+    const responseData = await callFlow(BOOKINGS_URL, 'POWER_AUTOMATE_BOOKINGS_URL', {
+        action: 'update',
+        id: bookingId,
+        data: {
+            booking_date: date,
+            booking_time: time,
+            status: 'Rescheduled'
+        }
+    });
 
-    writeJsonDb(bookings);
-
-    const simulatedSql = `
-UPDATE bookings 
-SET booking_date = '${date}', booking_time = '${time}', status = 'Rescheduled' 
-WHERE id = ${bookingId};
-    `.trim();
-
-    return {
-        booking: bookings[bookingIndex],
-        sqlQuery: simulatedSql,
-        engine: 'Simulated JSON Database (SQL Fallback)'
-    };
+    const body = coerceBody(responseData);
+    const item = body.item ?? { ...target, booking_date: date, booking_time: time, status: 'Rescheduled' };
+    return { booking: { ...item, id: item.id ?? item.ID ?? item.Id ?? bookingId } };
 }
 
 /**
- * Cancel a booking (soft delete)
+ * Cancel a booking — soft-delete by setting status to Cancelled.
  */
 async function deleteBooking(id) {
     const bookingId = parseInt(id);
 
-    if (useSqlDB) {
-        try {
-            const deleteQuery = `
-                UPDATE bookings 
-                SET status = 'Cancelled'
-                WHERE id = ?
-            `;
-            await sqlPool.query(deleteQuery, [bookingId]);
-
-            // Retrieve updated record
-            const selectQuery = `
-                SELECT 
-                    id, visitor_name, visitor_email, visitor_phone, 
-                    DATE_FORMAT(booking_date, '%Y-%m-%d') AS booking_date, booking_time, 
-                    visitor_count, scheme_name, special_requests, status, created_at
-                FROM bookings
-                WHERE id = ?
-            `;
-            const [fetchedRows] = await sqlPool.query(selectQuery, [bookingId]);
-
-            if (fetchedRows.length === 0) {
-                throw new Error('Booking not found.');
-            }
-
-            const simulatedSql = `
-UPDATE bookings 
-SET status = 'Cancelled' 
-WHERE id = ${bookingId};
-            `.trim();
-
-            return {
-                booking: fetchedRows[0],
-                sqlQuery: simulatedSql,
-                engine: 'MySQL Server'
-            };
-        } catch (err) {
-            if (err.message.includes('not found')) throw err;
-            console.error('SQL cancellation failed. Using JSON fallback.', err);
-            throw err;
-        }
-    }
-
-    // JSON Fallback
-    const bookings = readJsonDb();
-    const bookingIndex = bookings.findIndex(b => b.id === bookingId);
-    if (bookingIndex === -1) {
+    // Verify booking exists before attempting cancel
+    const { data: existing } = await getAllBookings();
+    const target = existing.find(b => Number(b.id) === bookingId);
+    if (!target) {
         throw new Error('Booking not found.');
     }
 
-    bookings[bookingIndex].status = 'Cancelled';
-    writeJsonDb(bookings);
+    const responseData = await callFlow(BOOKINGS_URL, 'POWER_AUTOMATE_BOOKINGS_URL', {
+        action: 'delete',
+        id: bookingId
+    });
 
-    const simulatedSql = `
-UPDATE bookings 
-SET status = 'Cancelled' 
-WHERE id = ${bookingId};
-    `.trim();
-
-    return {
-        booking: bookings[bookingIndex],
-        sqlQuery: simulatedSql,
-        engine: 'Simulated JSON Database (SQL Fallback)'
-    };
+    // Return the updated record; if flow doesn't echo it back, reconstruct locally
+    const body = coerceBody(responseData);
+    const item = body.item ?? { ...target, status: 'Cancelled' };
+    return { booking: { ...item, id: item.id ?? item.ID ?? item.Id ?? bookingId } };
 }
 
 /**
- * Retrieve booking statistics
+ * Compute dashboard statistics from live SharePoint data.
  */
 async function getStats() {
-    if (useSqlDB) {
-        try {
-            const statsQuery = `
-                SELECT 
-                    COUNT(*) as totalBookings,
-                    COALESCE(SUM(visitor_count), 0) as totalVisitors,
-                    SUM(CASE WHEN booking_date >= CURDATE() AND status != 'Cancelled' THEN 1 ELSE 0 END) as upcomingTours,
-                    SUM(CASE WHEN status = 'Cancelled' THEN 1 ELSE 0 END) as cancelledBookings
-                FROM bookings
-            `;
-            const [statsRows] = await sqlPool.query(statsQuery);
-            const stats = statsRows[0];
-            return {
-                stats: {
-                    totalBookings: Number(stats.totalBookings) || 0,
-                    totalVisitors: Number(stats.totalVisitors) || 0,
-                    upcomingTours: Number(stats.upcomingTours) || 0,
-                    cancelledBookings: Number(stats.cancelledBookings) || 0
-                },
-                sqlQuery: statsQuery.trim(),
-                engine: 'MySQL Server'
-            };
-        } catch (err) {
-            console.error('SQL stats failed. Using JSON fallback.', err);
-            throw err;
-        }
-    }
-
-    // JSON Fallback
-    const bookings = readJsonDb();
+    const { data: bookings } = await getAllBookings();
     const today = new Date().toISOString().split('T')[0];
 
     const totalBookings = bookings.length;
-    const totalVisitors = bookings.reduce((sum, b) => sum + (b.visitor_count || 0), 0);
+    const totalVisitors = bookings.reduce((sum, b) => sum + (parseInt(b.visitor_count) || 0), 0);
     const upcomingTours = bookings.filter(b => b.booking_date >= today && b.status !== 'Cancelled').length;
     const cancelledBookings = bookings.filter(b => b.status === 'Cancelled').length;
 
-    const simulatedSql = `
-SELECT 
-    COUNT(*) as totalBookings,
-    SUM(visitor_count) as totalVisitors,
-    SUM(CASE WHEN booking_date >= CURDATE() AND status != 'Cancelled' THEN 1 ELSE 0 END) as upcomingTours,
-    SUM(CASE WHEN status = 'Cancelled' THEN 1 ELSE 0 END) as cancelledBookings
-FROM bookings;
-    `.trim();
-
     return {
-        stats: {
-            totalBookings,
-            totalVisitors,
-            upcomingTours,
-            cancelledBookings
-        },
-        sqlQuery: simulatedSql,
-        engine: 'Simulated JSON Database (SQL Fallback)'
+        stats: { totalBookings, totalVisitors, upcomingTours, cancelledBookings }
     };
 }
 
-// -------------------------------------------------------------
-// House Scheme Methods
-// -------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// SCHEMES — CRUD
+// ---------------------------------------------------------------------------
 
 /**
- * Get all active Schemes
+ * Retrieve all property schemes from SharePoint.
  */
 async function getAllSchemes() {
-    if (useSqlDB) {
-        try {
-            const query = `
-                SELECT id, name, address, price, viewing_rules, description
-                FROM schemes
-                ORDER BY id ASC
-            `;
-            const [rows] = await sqlPool.query(query);
-            return {
-                data: rows,
-                sqlQuery: query.trim(),
-                engine: 'MySQL Server'
-            };
-        } catch (err) {
-            console.error('SQL query schemes failed. Using JSON fallback.', err);
-            throw err;
-        }
-    }
+    const responseData = await callFlow(SCHEMES_URL, 'POWER_AUTOMATE_SCHEMES_URL', {
+        action: 'getAll'
+    });
 
-    // Fallback JSON schemes
-    const schemes = readSchemesDb();
-    const simulatedSql = `SELECT id, name, address, price, viewing_rules, description FROM schemes ORDER BY id ASC;`;
-    return {
-        data: schemes,
-        sqlQuery: simulatedSql,
-        engine: 'Simulated JSON Database (SQL Fallback)'
-    };
+    const data = extractItems(responseData);
+    data.sort((a, b) => Number(b.id) - Number(a.id));  // newest (highest ID) first
+    return { data };
 }
 
 /**
- * Create a new Scheme (Admin feature)
+ * Create a new property scheme in SharePoint.
  */
 async function createScheme(data) {
     const { name, address, price, viewing_rules, description } = data;
 
-    if (useSqlDB) {
-        try {
-            const insertQuery = `
-                INSERT INTO schemes (name, address, price, viewing_rules, description)
-                VALUES (?, ?, ?, ?, ?)
-            `;
-
-            const [insertResult] = await sqlPool.query(insertQuery, [
-                name,
-                address || null,
-                price,
-                viewing_rules || null,
-                description || null
-            ]);
-
-            const insertId = insertResult.insertId;
-
-            // Retrieve newly inserted scheme
-            const selectQuery = `
-                SELECT id, name, address, price, viewing_rules, description
-                FROM schemes
-                WHERE id = ?
-            `;
-            const [fetchedRows] = await sqlPool.query(selectQuery, [insertId]);
-
-            const simulatedSql = `
-INSERT INTO schemes (name, address, price, viewing_rules, description)
-VALUES ('${name}', ${address ? `'${address}'` : 'NULL'}, '${price}', ${viewing_rules ? `'${viewing_rules}'` : 'NULL'}, ${description ? `'${description}'` : 'NULL'});
-            `.trim();
-
-            return {
-                scheme: fetchedRows[0],
-                sqlQuery: simulatedSql,
-                engine: 'MySQL Server'
-            };
-        } catch (err) {
-            console.error('SQL create scheme failed:', err);
-            throw err;
-        }
-    }
-
-    // JSON Fallback / Simulation
-    // FIX: address field was missing from newScheme object — caused undefined on read-back
-    // which crashed renderSchemesTable() in the frontend
-    const schemes = readSchemesDb();
-
-    const isConflict = schemes.some(s => s.name.toLowerCase() === name.toLowerCase());
-    if (isConflict) {
+    // Duplicate name check
+    const { data: existing } = await getAllSchemes();
+    const conflict = existing.some(s => (s.name || '').toLowerCase() === name.toLowerCase());
+    if (conflict) {
         throw new Error('A scheme with this property name already exists.');
     }
 
-    const newId = schemes.length > 0 ? Math.max(...schemes.map(s => s.id)) + 1 : 1;
-    const newScheme = {
-        id: newId,
-        name,
-        address: address || '',          // FIX: was missing entirely
-        price,
-        viewing_rules: viewing_rules || '',
-        description: description || ''
-    };
+    const responseData = await callFlow(SCHEMES_URL, 'POWER_AUTOMATE_SCHEMES_URL', {
+        action: 'create',
+        data: {
+            name,
+            address: address || '',
+            price,
+            viewing_rules: viewing_rules || '',
+            description: description || ''
+        }
+    });
 
-    schemes.push(newScheme);
-    writeSchemesDb(schemes);
-
-    const simulatedSql = `
-INSERT INTO schemes (name, address, price, viewing_rules, description)
-VALUES ('${name}', ${address ? `'${address}'` : 'NULL'}, '${price}', ${viewing_rules ? `'${viewing_rules}'` : 'NULL'}, ${description ? `'${description}'` : 'NULL'});
-    `.trim();
-
-    return {
-        scheme: newScheme,
-        sqlQuery: simulatedSql,
-        engine: 'Simulated JSON Database (SQL Fallback)'
-    };
+    const body = coerceBody(responseData);
+    const item = body.item ?? body;
+    return { scheme: { ...item, id: item.id ?? item.ID ?? item.Id } };
 }
+
+/**
+ * Update an existing property scheme in SharePoint.
+ */
+async function updateScheme(id, data) {
+    const schemeId = parseInt(id);
+    const { name, address, price, viewing_rules, description } = data;
+
+    const responseData = await callFlow(SCHEMES_URL, 'POWER_AUTOMATE_SCHEMES_URL', {
+        action: 'update',
+        id: schemeId,
+        data: {
+            name,
+            address: address || '',
+            price,
+            viewing_rules: viewing_rules || '',
+            description: description || ''
+        }
+    });
+
+    const body = coerceBody(responseData);
+    const item = body.item ?? { id: schemeId, ...data };
+    return { scheme: { ...item, id: item.id ?? item.ID ?? item.Id ?? schemeId } };
+}
+
+/**
+ * Delete a property scheme from SharePoint.
+ */
+async function deleteScheme(id) {
+    const schemeId = parseInt(id);
+
+    // Verify scheme exists before attempting delete
+    const { data: existing } = await getAllSchemes();
+    const target = existing.find(s => Number(s.id) === schemeId);
+    if (!target) {
+        throw new Error('Scheme not found.');
+    }
+
+    await callFlow(SCHEMES_URL, 'POWER_AUTOMATE_SCHEMES_URL', {
+        action: 'delete',
+        id: schemeId
+    });
+
+    return { scheme: target };
+}
+
+// ---------------------------------------------------------------------------
+// Startup log
+// ---------------------------------------------------------------------------
+console.log('\n======================================================');
+console.log('🚀 DATA LAYER: SharePoint via Power Automate');
+console.log(`   Bookings flow : ${BOOKINGS_URL ? '✅ Configured' : '❌ MISSING — set POWER_AUTOMATE_BOOKINGS_URL'}`);
+console.log(`   Schemes flow  : ${SCHEMES_URL ? '✅ Configured' : '❌ MISSING — set POWER_AUTOMATE_SCHEMES_URL'}`);
+console.log('======================================================\n');
 
 module.exports = {
     getAllBookings,
@@ -631,5 +333,6 @@ module.exports = {
     getStats,
     getAllSchemes,
     createScheme,
-    initializeDB
+    updateScheme,
+    deleteScheme
 };
