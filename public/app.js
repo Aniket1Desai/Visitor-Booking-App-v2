@@ -14,6 +14,30 @@ const bookingData = {
     visitor_count: 2,
     special_requests: ''
 };
+// -------------------------------------------------------------
+// Booking form field validation (client-side, mirrors server rules)
+// -------------------------------------------------------------
+function validateBookingDetails(name, email, phone) {
+    const errors = [];
+
+    // Name: letters and spaces only (allows . ' - for names like O'Brien)
+    if (!/^[A-Za-z .'-]+$/.test(name)) {
+        errors.push("Name may contain only letters and spaces.");
+    }
+
+    // Email: must be a gmail.com address
+    if (!/^[^\s@]+@gmail\.com$/i.test(email)) {
+        errors.push("Email must be a valid gmail.com address (e.g. name@gmail.com).");
+    }
+
+    // Phone: exactly 10 digits (spaces/dashes ignored)
+    const phoneDigits = String(phone).replace(/[\s-]/g, '');
+    if (!/^\d{10}$/.test(phoneDigits)) {
+        errors.push("Phone number must be exactly 10 digits.");
+    }
+
+    return errors;
+}
 
 const timeSlots = [
     "09:00 AM", "10:00 AM", "11:00 AM", "12:00 PM",
@@ -205,11 +229,29 @@ function renderTimeSlots(dateInputId, containerId, hiddenInputId) {
 
 function nextStep(step) {
     if (step === 2) {
-        bookingData.visitor_name = document.getElementById('visitor_name').value.trim();
-        bookingData.visitor_email = document.getElementById('visitor_email').value.trim();
-        bookingData.visitor_phone = document.getElementById('visitor_phone').value.trim();
+        const name = document.getElementById('visitor_name').value.trim();
+        const email = document.getElementById('visitor_email').value.trim();
+        const phone = document.getElementById('visitor_phone').value.trim();
+        const scheme = document.getElementById('booking_scheme').value;
+
+        // Required-field guard
+        if (!name || !email || !phone || !scheme) {
+            showToast("Missing Details", "Please fill in name, email, phone, and select a scheme.", "error");
+            return;   // stay on step 1
+        }
+
+        // Format validation
+        const errors = validateBookingDetails(name, email, phone);
+        if (errors.length > 0) {
+            showToast("Please Check Your Details", errors.join(' '), "error");
+            return;   // stay on step 1, don't advance
+        }
+
+        bookingData.visitor_name = name;
+        bookingData.visitor_email = email;
+        bookingData.visitor_phone = phone.replace(/[\s-]/g, '');  // store clean digits
         bookingData.visitor_count = parseInt(document.getElementById('visitor_count').value);
-        bookingData.scheme_name = document.getElementById('booking_scheme').value;
+        bookingData.scheme_name = scheme;
     }
 
     if (step === 3) {
@@ -386,16 +428,43 @@ async function cancelBooking(id, name) {
     }
 }
 
+function parseBookingDateTime(dateStr, timeStr) {
+    if (!dateStr || !timeStr) return new Date(0);
+    const match = timeStr.match(/^(\d{2}):(\d{2})\s*(AM|PM)$/i);
+    if (!match) {
+        return new Date(`${dateStr}T${timeStr}`);
+    }
+    let hours = parseInt(match[1], 10);
+    const minutes = parseInt(match[2], 10);
+    const ampm = match[3].toUpperCase();
+    
+    if (ampm === 'PM' && hours < 12) {
+        hours += 12;
+    } else if (ampm === 'AM' && hours === 12) {
+        hours = 0;
+    }
+    
+    const hh = String(hours).padStart(2, '0');
+    const mm = String(minutes).padStart(2, '0');
+    return new Date(`${dateStr}T${hh}:${mm}:00`);
+}
+
 function renderBookingsTable(filteredBookings = allBookings) {
     const tbody = document.getElementById('bookings-tbody');
     if (!tbody) return;
 
     tbody.innerHTML = '';
 
-    if (filteredBookings.length === 0) {
+    const now = new Date();
+    const upcomingBookings = filteredBookings.filter(b => {
+        const bookingDateTime = parseBookingDateTime(b.booking_date, b.booking_time);
+        return bookingDateTime >= now;
+    });
+
+    if (upcomingBookings.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="7" class="text-center py-5 text-muted">
+                <td colspan="8" class="text-center py-5 text-muted">
                     <i class="fa-solid fa-folder-open" style="font-size: 2rem; margin-bottom: 10px; display:block; opacity: 0.5;"></i>
                     No viewing bookings match your search query.
                 </td>
@@ -404,7 +473,7 @@ function renderBookingsTable(filteredBookings = allBookings) {
         return;
     }
 
-    filteredBookings.forEach(booking => {
+    upcomingBookings.forEach(booking => {
         const tr = document.createElement('tr');
 
         let badgeClass = 'badge-confirmed';
@@ -638,6 +707,10 @@ function applyRoleVisibility() {
 
     const reserveBtn = document.getElementById('header-reserve-btn');
     if (reserveBtn) reserveBtn.style.display = (currentRole === 'visitor') ? '' : 'none';
+
+    if (typeof window.renderLogoutButton === 'function') {
+        window.renderLogoutButton(currentRole === 'admin');
+    }
 }
 
 // -------------------------------------------------------------

@@ -85,18 +85,36 @@ function extractItems(responseData) {
  * Retrieve all booking records from SharePoint, sorted by date desc / time asc.
  */
 async function getAllBookings() {
-    const responseData = await callFlow(BOOKINGS_URL, 'POWER_AUTOMATE_BOOKINGS_URL', {
-        action: 'getAll'
-    });
+    const responseData = await callFlow(
+        BOOKINGS_URL,
+        'POWER_AUTOMATE_BOOKINGS_URL',
+        {
+            action: 'getAll'
+        }
+    );
 
     const items = extractItems(responseData);
 
-    // Sort: newest date first, then earliest time within each date
+    const now = new Date();
+
     items.sort((a, b) => {
-        if (a.booking_date !== b.booking_date) {
-            return (b.booking_date || '').localeCompare(a.booking_date || '');
+        const dateTimeA = new Date(`${a.booking_date}T${a.booking_time}`);
+        const dateTimeB = new Date(`${b.booking_date}T${b.booking_time}`);
+
+        const aUpcoming = dateTimeA >= now;
+        const bUpcoming = dateTimeB >= now;
+
+        // Upcoming bookings first
+        if (aUpcoming && !bUpcoming) return -1;
+        if (!aUpcoming && bUpcoming) return 1;
+
+        if (aUpcoming && bUpcoming) {
+            // Closest upcoming booking first
+            return dateTimeA - dateTimeB;
         }
-        return (a.booking_time || '').localeCompare(b.booking_time || '');
+
+        // Past bookings: newest past booking first
+        return dateTimeB - dateTimeA;
     });
 
     return { data: items };

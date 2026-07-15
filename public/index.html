@@ -460,13 +460,104 @@
             --accent-cyan: #34D399;
         }
 
-        /* Hide main app until logged in */
+        /* App is always visible — visitor role is the default */
         #app-wrapper {
-            display: none;
+            display: block;
         }
 
-        #app-wrapper.logged-in {
+        /* Login screen is hidden by default; only shown programmatically */
+        #login-screen {
+            display: none !important;
+        }
+
+        /* Admin Login Modal */
+        #admin-login-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 99998;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.65);
+            backdrop-filter: blur(6px);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s ease;
+        }
+        #admin-login-modal.open {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        #admin-login-modal .admin-modal-card {
+            position: relative;
+            width: 100%;
+            max-width: 400px;
+            margin: 0 16px;
+            background: rgba(15, 15, 30, 0.92);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 20px;
+            padding: 36px 36px 32px;
+            backdrop-filter: blur(24px);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255,255,255,0.05);
+            animation: cardIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+        #admin-login-modal .modal-brand {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        #admin-login-modal .modal-brand i {
+            font-size: 2rem;
+            color: #8B5CF6;
+            margin-bottom: 8px;
             display: block;
+        }
+        #admin-login-modal .modal-brand h3 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: #e2e8f0;
+            margin: 0 0 4px;
+        }
+        #admin-login-modal .modal-brand p {
+            font-size: 0.78rem;
+            color: rgba(148, 163, 184, 0.65);
+            margin: 0;
+        }
+        #admin-login-modal .admin-modal-error {
+            display: none;
+            align-items: center;
+            gap: 8px;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.25);
+            border-radius: 8px;
+            padding: 9px 12px;
+            margin-bottom: 12px;
+            font-size: 0.8rem;
+            color: #FCA5A5;
+        }
+        #admin-login-modal .admin-modal-error.visible {
+            display: flex;
+        }
+        #admin-login-modal .modal-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 18px;
+        }
+        #admin-login-modal .btn-cancel-modal {
+            flex: 1;
+            padding: 10px;
+            border-radius: 10px;
+            border: 1px solid var(--glass-border);
+            background: var(--field-bg);
+            color: var(--text-secondary);
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.88rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        #admin-login-modal .btn-cancel-modal:hover {
+            background: rgba(255,255,255,0.06);
         }
     </style>
 </head>
@@ -582,10 +673,7 @@
                 <!-- Logged-in user role badge -->
                 <span class="role-badge" id="nav-role-badge" style="display:none;"></span>
 
-                <!-- Logout button -->
-                <button class="btn-logout" id="btn-logout" style="display:none;" onclick="doLogout()">
-                    <i class="fa-solid fa-right-from-bracket"></i> Logout
-                </button>
+                <!-- Logout button dynamically rendered based on role -->
 
                 <!-- Role Selector Dropdown (visible admin only) -->
                 <div class="role-selector-container" id="role-selector-container">
@@ -602,7 +690,7 @@
                                 <p>Book private viewings &amp; inspect tour guidelines</p>
                             </div>
                         </div>
-                        <div class="role-option" id="role-opt-admin" onclick="switchRole('admin')">
+                        <div class="role-option" id="role-opt-admin" onclick="window.requestAdminAccess ? window.requestAdminAccess() : switchRole('admin')">
                             <i class="fa-solid fa-user-shield"></i>
                             <div>
                                 <strong>Admin View</strong>
@@ -1333,6 +1421,37 @@
 
     </div><!-- /#app-wrapper -->
 
+    <!-- ADMIN LOGIN MODAL (shown when switching to Admin from role dropdown) -->
+    <div id="admin-login-modal">
+        <div class="admin-modal-card">
+            <div class="modal-brand">
+                <i class="fa-solid fa-user-shield"></i>
+                <h3>Admin Access Required</h3>
+                <p>Enter your administrator credentials to continue.</p>
+            </div>
+            <div class="admin-modal-error" id="admin-modal-error">
+                <i class="fa-solid fa-circle-exclamation"></i>
+                <span id="admin-modal-error-text">Invalid credentials. Please try again.</span>
+            </div>
+            <div class="login-field-group">
+                <label for="admin-modal-email">Email Address</label>
+                <input type="email" id="admin-modal-email" class="glass-input" placeholder="admin@opennest.com" autocomplete="email">
+            </div>
+            <div class="login-field-group" style="margin-top: 12px;">
+                <label for="admin-modal-password">Password</label>
+                <input type="password" id="admin-modal-password" class="glass-input" placeholder="••••••••" autocomplete="current-password"
+                    onkeydown="if(event.key==='Enter') window.submitAdminLogin && window.submitAdminLogin()">
+            </div>
+            <div class="modal-actions">
+                <button class="btn-cancel-modal" onclick="window.closeAdminLoginModal && window.closeAdminLoginModal()">Cancel</button>
+                <button class="btn-login" id="btn-admin-modal-submit" style="flex:2; margin:0; border-radius:10px; font-size:0.88rem; padding:10px 16px;"
+                    onclick="window.submitAdminLogin && window.submitAdminLogin()">
+                    <i class="fa-solid fa-right-to-bracket"></i>&nbsp; Sign In
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Original app scripts -->
     <script src="app.js"></script>
 
@@ -1621,13 +1740,14 @@
             }
 
             /* Logout button */
-            var logoutBtn = document.getElementById('btn-logout');
-            if (logoutBtn) logoutBtn.style.display = '';
+            if (typeof window.renderLogoutButton === 'function') {
+                window.renderLogoutButton(role === 'admin');
+            }
 
-            /* 5. Sync role-selector dropdown */
+            /* 5. Role selector is always visible so users can switch roles */
             var roleSelectorContainer = document.getElementById('role-selector-container');
             if (roleSelectorContainer) {
-                roleSelectorContainer.style.display = isAdmin ? '' : 'none';
+                roleSelectorContainer.style.display = '';
             }
 
             /* Keep app.js switchRole() in sync */
@@ -1643,27 +1763,144 @@
             }
         }
 
-        /* ── LOGOUT ───────────────────────────────────────────────── */
+        /* ── LOGOUT → revert to Visitor role (no page reload) ──── */
         function doLogout() {
-            try { localStorage.removeItem(SESSION_KEY); } catch (e) { }
-            location.reload();
+            try { sessionStorage.removeItem(SESSION_KEY); } catch (e) { }
+            applyRoleAccess('visitor');
         }
 
-        /* ── AUTO-RESTORE SESSION ON PAGE LOAD ───────────────────── */
-        (function restoreSession() {
+        /* ── LOGOUT BUTTON — rendered only when Admin is active ── */
+        window.renderLogoutButton = function(show) {
+            var logoutBtn = document.getElementById('btn-logout');
+            if (show) {
+                if (!logoutBtn) {
+                    logoutBtn = document.createElement('button');
+                    logoutBtn.className = 'btn-logout';
+                    logoutBtn.id = 'btn-logout';
+                    logoutBtn.onclick = doLogout;
+                    logoutBtn.innerHTML = '<i class="fa-solid fa-right-from-bracket"></i> Logout';
+                    var container = document.getElementById('role-selector-container');
+                    if (container) {
+                        container.parentNode.insertBefore(logoutBtn, container);
+                    } else {
+                        var headerControls = document.querySelector('.header-controls');
+                        if (headerControls) headerControls.appendChild(logoutBtn);
+                    }
+                }
+            } else {
+                if (logoutBtn) logoutBtn.remove();
+            }
+        };
+
+        /* ── ADMIN LOGIN MODAL ───────────────────────────────────── */
+        window.requestAdminAccess = function() {
+            /* Close the role dropdown first */
+            var dropdownContainer = document.querySelector('.role-selector-container');
+            if (dropdownContainer) dropdownContainer.classList.remove('open');
+            /* If already admin, no need to re-authenticate */
+            if (typeof currentRole !== 'undefined' && currentRole === 'admin') return;
+            window.showAdminLoginModal();
+        };
+
+        window.showAdminLoginModal = function() {
+            var modal = document.getElementById('admin-login-modal');
+            var emailInput = document.getElementById('admin-modal-email');
+            var passInput = document.getElementById('admin-modal-password');
+            var errorEl = document.getElementById('admin-modal-error');
+            if (!modal) return;
+            if (emailInput) emailInput.value = '';
+            if (passInput) passInput.value = '';
+            if (errorEl) errorEl.classList.remove('visible');
+            modal.classList.add('open');
+            setTimeout(function() { if (emailInput) emailInput.focus(); }, 100);
+        };
+
+        window.closeAdminLoginModal = function() {
+            var modal = document.getElementById('admin-login-modal');
+            if (modal) modal.classList.remove('open');
+        };
+
+        window.submitAdminLogin = function() {
+            var email = (document.getElementById('admin-modal-email').value || '').trim();
+            var password = (document.getElementById('admin-modal-password').value || '').trim();
+            var errorEl = document.getElementById('admin-modal-error');
+            var errorText = document.getElementById('admin-modal-error-text');
+            var btn = document.getElementById('btn-admin-modal-submit');
+
+            if (!email) {
+                errorText.textContent = 'Please enter your email address.';
+                errorEl.classList.add('visible');
+                return;
+            }
+            if (password.length < 3) {
+                errorText.textContent = 'Password must be at least 3 characters.';
+                errorEl.classList.add('visible');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>&nbsp; Verifying...';
+
+            fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: email, password: password })
+            })
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i>&nbsp; Sign In';
+
+                if (data.error || !data.user || data.user.role !== 'admin') {
+                    errorText.textContent = 'Invalid credentials or insufficient permissions.';
+                    errorEl.classList.add('visible');
+                    return;
+                }
+
+                /* Store admin session for this browser tab only */
+                try { sessionStorage.setItem(SESSION_KEY, JSON.stringify({ role: 'admin', email: data.user.email, name: data.user.name })); } catch(e) {}
+
+                window.closeAdminLoginModal();
+                applyRoleAccess('admin');
+            })
+            .catch(function() {
+                /* Fallback: allow demo credentials when backend is unreachable */
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i>&nbsp; Sign In';
+
+                if (email === 'admin@opennest.com' && password === 'admin123') {
+                    try { sessionStorage.setItem(SESSION_KEY, JSON.stringify({ role: 'admin', email: email, name: 'Admin', demo: true })); } catch(e) {}
+                    window.closeAdminLoginModal();
+                    applyRoleAccess('admin');
+                } else {
+                    errorText.textContent = 'Invalid credentials. Please try again.';
+                    errorEl.classList.add('visible');
+                }
+            });
+        };
+
+        /* Close admin modal when clicking backdrop */
+        document.getElementById('admin-login-modal').addEventListener('click', function(e) {
+            if (e.target === this) window.closeAdminLoginModal();
+        });
+
+        /* ── BOOT: Always start as Visitor — no login screen on load ─ */
+        (function bootAsVisitor() {
+            /* sessionStorage check: allow same-tab admin session to persist across
+               soft navigations, but a fresh browser session always starts as visitor */
             var raw = null;
-            try { raw = localStorage.getItem(SESSION_KEY); } catch (e) { }
+            try { raw = sessionStorage.getItem(SESSION_KEY); } catch(e) {}
 
-            if (!raw) return;
+            var role = 'visitor';
+            if (raw) {
+                try {
+                    var s = JSON.parse(raw);
+                    if (s && s.role === 'admin') role = 'admin';
+                } catch(e) {}
+            }
 
-            var session = null;
-            try { session = JSON.parse(raw); } catch (e) { }
-
-            if (!session || !session.role) return;
-
-            _selectedLoginRole = session.role;
-            applyRoleAccess(session.role);
-            revealApp();
+            _selectedLoginRole = role;
+            applyRoleAccess(role);
         })();
 
         /* ══════════════════════════════════════════════════

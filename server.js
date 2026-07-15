@@ -18,11 +18,11 @@
  */
 
 const express = require('express');
-const cors    = require('cors');
-const path    = require('path');
-const db      = require('./db');
+const cors = require('cors');
+const path = require('path');
+const db = require('./db');
 
-const app  = express();
+const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
@@ -59,15 +59,46 @@ app.post('/api/bookings', async (req, res) => {
     } = req.body;
     const booking_date = req.body.booking_date || new Date().toISOString().split('T')[0];
 
+    // --- Required-field check ---
     if (!visitor_name || !visitor_email || !visitor_phone || !booking_date || !booking_time || !scheme_name) {
         return res.status(400).json({
             error: 'Missing required booking fields (name, email, phone, date, time, scheme_name)'
         });
     }
 
+    // --- Field validation ---
+    const errors = [];
+
+    // Name: letters and spaces only (allows . ' - for names like O'Brien, Anne-Marie)
+    // If you truly want digits allowed too, use: /^[A-Za-z0-9 ]+$/
+    const nameRegex = /^[A-Za-z .'-]+$/;
+    if (!nameRegex.test(visitor_name.trim())) {
+        errors.push('Name may contain only letters and spaces.');
+    }
+
+    // Email: must contain @ and be a gmail.com address (as requested)
+    // To accept ANY valid email instead, use: /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    const emailRegex = /^[^\s@]+@gmail\.com$/i;
+    if (!emailRegex.test(visitor_email.trim())) {
+        errors.push('Email must be a valid gmail.com address (e.g. name@gmail.com).');
+    }
+
+    // Phone: exactly 10 digits (spaces and dashes are stripped before checking)
+    const phoneDigits = String(visitor_phone).replace(/[\s-]/g, '');
+    if (!/^\d{10}$/.test(phoneDigits)) {
+        errors.push('Phone number must be exactly 10 digits.');
+    }
+
+    if (errors.length > 0) {
+        return res.status(400).json({ error: 'Validation failed', details: errors });
+    }
+
+    // --- Create booking ---
     try {
         const result = await db.createBooking({
-            visitor_name, visitor_email, visitor_phone,
+            visitor_name: visitor_name.trim(),
+            visitor_email: visitor_email.trim(),
+            visitor_phone: phoneDigits,
             booking_date, booking_time,
             visitor_count, scheme_name, special_requests
         });
@@ -98,7 +129,7 @@ app.put('/api/bookings/:id', async (req, res) => {
         res.json({ booking: result.booking });
     } catch (err) {
         if (err.message.includes('already booked')) return res.status(409).json({ error: err.message });
-        if (err.message.includes('not found'))      return res.status(404).json({ error: err.message });
+        if (err.message.includes('not found')) return res.status(404).json({ error: err.message });
         console.error('PUT /api/bookings/:id error:', err.message);
         res.status(500).json({ error: 'Failed to reschedule booking', details: err.message });
     }
