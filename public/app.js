@@ -11,8 +11,7 @@ const bookingData = {
     visitor_phone: '',
     booking_date: '',
     booking_time: '',
-    visitor_count: 2,
-    special_requests: ''
+    visitor_count: 2
 };
 // -------------------------------------------------------------
 // Booking form field validation (client-side, mirrors server rules)
@@ -50,7 +49,6 @@ let allSchemes = [];
 let schemesCurrentPage = 1;
 const SCHEMES_PER_PAGE = 5;
 let visitorMap = null;
-let adminMap = null;
 const estateCoords = [18.9543, 72.8088];
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -156,11 +154,6 @@ function showSection(sectionId) {
             initVisitorMap();
             if (visitorMap) visitorMap.invalidateSize();
         }, 100);
-    } else if (sectionId === 'dashboard-section') {
-        setTimeout(() => {
-            initAdminMap();
-            if (adminMap) adminMap.invalidateSize();
-        }, 100);
     } else if (sectionId === 'troubleshoot-section') {
         setTimeout(() => runTroubleshootDiagnostic(), 200);
     }
@@ -255,7 +248,6 @@ function nextStep(step) {
     }
 
     if (step === 3) {
-        bookingData.special_requests = document.getElementById('special_requests').value.trim();
         document.getElementById('sum-name').textContent = bookingData.visitor_name;
         document.getElementById('sum-count').textContent = bookingData.visitor_count;
         document.getElementById('sum-email').textContent = bookingData.visitor_email;
@@ -464,7 +456,7 @@ function renderBookingsTable(filteredBookings = allBookings) {
     if (upcomingBookings.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="8" class="text-center py-5 text-muted">
+                <td colspan="7" class="text-center py-5 text-muted">
                     <i class="fa-solid fa-folder-open" style="font-size: 2rem; margin-bottom: 10px; display:block; opacity: 0.5;"></i>
                     No viewing bookings match your search query.
                 </td>
@@ -480,10 +472,6 @@ function renderBookingsTable(filteredBookings = allBookings) {
         if (booking.status === 'Rescheduled') badgeClass = 'badge-rescheduled';
         if (booking.status === 'Cancelled') badgeClass = 'badge-cancelled';
 
-        const requestsStr = booking.special_requests
-            ? (booking.special_requests.length > 50 ? booking.special_requests.substring(0, 47) + '...' : booking.special_requests)
-            : '<span class="text-muted">None</span>';
-
         const isCancelled = booking.status === 'Cancelled';
 
         tr.innerHTML = `
@@ -498,7 +486,6 @@ function renderBookingsTable(filteredBookings = allBookings) {
             </td>
             <td><span class="spec-tag">${booking.visitor_count} Guest/s</span></td>
             <td><span class="spec-tag" style="background: rgba(6, 182, 212, 0.08); border-color: rgba(6, 182, 212, 0.2); color: var(--accent-cyan); font-weight: 600;">${escapeHtml(booking.scheme_name || 'Open Nest')}</span></td>
-            <td title="${escapeHtml(booking.special_requests || '')}">${escapeHtml(requestsStr)}</td>
             <td><span class="status-badge ${badgeClass}">${booking.status}</span></td>
             <td>
                 <div class="actions-cell">
@@ -531,8 +518,7 @@ function filterBookings() {
     const filtered = allBookings.filter(b =>
         b.visitor_name.toLowerCase().includes(searchVal) ||
         b.visitor_email.toLowerCase().includes(searchVal) ||
-        b.booking_date.includes(searchVal) ||
-        (b.special_requests && b.special_requests.toLowerCase().includes(searchVal))
+        b.booking_date.includes(searchVal)
     );
 
     renderBookingsTable(filtered);
@@ -542,13 +528,11 @@ function filterBookings() {
 
 function resetBookingForm() {
     document.getElementById('details-form').reset();
-    document.getElementById('special_requests').value = '';
 
     bookingData.visitor_name = '';
     bookingData.visitor_email = '';
     bookingData.visitor_phone = '';
     bookingData.visitor_count = 2;
-    bookingData.special_requests = '';
     bookingData.scheme_name = '';
 
     refreshSchemes();
@@ -929,25 +913,6 @@ function initVisitorMap() {
     }).addTo(visitorMap);
 
     L.marker(estateCoords).addTo(visitorMap).bindPopup(`
-        <div style="font-family: 'Outfit', sans-serif; color: #1e293b; padding: 4px;">
-            <h5 style="margin: 0 0 4px 0; font-size: 14px; font-weight: 600; color: #0f172a;">Open Nest Estate</h5>
-            <p style="margin: 0; font-size: 11px; color: #64748b;">Malabar Hill, Mumbai, Maharashtra 400006</p>
-        </div>
-    `).openPopup();
-}
-
-function initAdminMap() {
-    if (adminMap) return;
-    const container = document.getElementById('admin-map');
-    if (!container) return;
-
-    adminMap = L.map('admin-map', { zoomControl: true, attributionControl: true }).setView(estateCoords, 14);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '\u00a9 <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-    }).addTo(adminMap);
-
-    L.marker(estateCoords).addTo(adminMap).bindPopup(`
         <div style="font-family: 'Outfit', sans-serif; color: #1e293b; padding: 4px;">
             <h5 style="margin: 0 0 4px 0; font-size: 14px; font-weight: 600; color: #0f172a;">Open Nest Estate</h5>
             <p style="margin: 0; font-size: 11px; color: #64748b;">Malabar Hill, Mumbai, Maharashtra 400006</p>

@@ -1675,7 +1675,7 @@ textarea.glass-input {
    ==================================================================== */
 .dashboard-grid {
     display: grid;
-    grid-template-columns: 1.25fr 0.75fr;
+    grid-template-columns: 1fr;
     gap: 30px;
     margin-bottom: 44px;
     align-items: flex-start;
@@ -1683,21 +1683,6 @@ textarea.glass-input {
 
 .bookings-list-card {
     min-height: 480px;
-}
-
-.admin-map-card {
-    padding: 30px;
-    min-height: 480px;
-    display: flex;
-    flex-direction: column;
-}
-
-.admin-map-card .location-map-wrapper {
-    flex-grow: 1;
-    min-height: 380px;
-    position: relative;
-    border-radius: 18px;
-    overflow: hidden;
 }
 
 .leaflet-container {
@@ -2104,11 +2089,7 @@ body.dark-theme .leaflet-tile-container {
 /* ====================================================================
    RESPONSIVE
    ==================================================================== */
-@media (max-width: 1200px) {
-    .dashboard-grid {
-        grid-template-columns: 1fr;
-    }
-}
+
 
 @media (max-width: 1100px) {
     .troubleshoot-status-row {
@@ -2192,107 +2173,172 @@ body.dark-theme .leaflet-tile-container {
 }
 
 /* ====================================================================
-   LOGIN GATE OVERRIDES
-   The login screen's colors are hard-coded inline in index.html.
-   These selectors are prefixed with #login-screen so they carry higher
-   specificity and repaint the gate to match the theme without editing
-   the login markup.
+   LOGIN GATE & ADMIN MODAL LIGHT THEME OVERRIDES
    ==================================================================== */
-body #login-screen {
+body.light-theme #login-screen {
     background: linear-gradient(160deg, #f0eefb 0%, #e6e3f6 100%);
 }
 
-#login-screen .login-blobs span {
+body.light-theme #login-screen .login-blobs span {
     opacity: 0.22;
 }
 
-#login-screen .login-card {
+body.light-theme #login-screen .login-card {
     background: rgba(255, 255, 255, 0.92);
     border: 1px solid rgba(99, 91, 209, 0.14);
     box-shadow: 0 24px 80px rgba(80, 70, 180, 0.20), inset 0 0 0 1px rgba(255, 255, 255, 0.6);
     backdrop-filter: blur(20px);
 }
 
-#login-screen .login-heading {
+body.light-theme #login-screen .login-heading {
     color: #201b45;
 }
 
-#login-screen .login-subheading,
-#login-screen .login-logo .logo-sub {
+body.light-theme #login-screen .login-subheading,
+body.light-theme #login-screen .login-logo .logo-sub {
     color: #6b6890;
 }
 
-#login-screen .login-divider {
+body.light-theme #login-screen .login-divider {
     background: linear-gradient(90deg, transparent, rgba(124, 58, 237, 0.4), rgba(79, 70, 229, 0.4), transparent);
 }
 
-#login-screen .role-tile {
+body.light-theme #login-screen .role-tile {
     border: 1.5px solid rgba(99, 91, 209, 0.14);
     background: #f5f4fc;
 }
 
-#login-screen .role-tile:hover {
+body.light-theme #login-screen .role-tile:hover {
     border-color: rgba(124, 58, 237, 0.45);
     background: rgba(124, 58, 237, 0.07);
 }
 
-#login-screen .role-tile.selected {
+body.light-theme #login-screen .role-tile.selected {
     border-color: #7c3aed;
     background: rgba(124, 58, 237, 0.12);
     box-shadow: 0 0 0 1px rgba(124, 58, 237, 0.3), 0 6px 20px rgba(124, 58, 237, 0.2);
 }
 
-#login-screen .role-tile.selected-cyan {
+body.light-theme #login-screen .role-tile.selected-cyan {
     border-color: #4f46e5;
     background: rgba(79, 70, 229, 0.10);
     box-shadow: 0 0 0 1px rgba(79, 70, 229, 0.3), 0 6px 20px rgba(79, 70, 229, 0.18);
 }
 
-#login-screen .role-tile .tile-label {
+body.light-theme #login-screen .role-tile .tile-label {
     color: #201b45;
 }
 
-#login-screen .role-tile .tile-desc {
+body.light-theme #login-screen .role-tile .tile-desc {
     color: #8a87a8;
 }
 
-#login-screen .role-tile[data-role="visitor"] .tile-icon {
+body.light-theme #login-screen .role-tile[data-role="visitor"] .tile-icon {
     color: #4f46e5;
 }
 
-#login-screen .role-tile[data-role="admin"] .tile-icon {
+body.light-theme #login-screen .role-tile[data-role="admin"] .tile-icon {
     color: #7c3aed;
 }
 
-#login-screen .login-field-group label {
+body.light-theme #login-screen .login-field-group label {
     color: #6b6890;
 }
 
-#login-screen .login-field-group input {
+body.light-theme #login-screen .login-field-group input {
     background: #f5f4fc;
     border: 1.5px solid rgba(99, 91, 209, 0.15);
     color: #201b45;
 }
 
-#login-screen .login-field-group input::placeholder {
+body.light-theme #login-screen .login-field-group input::placeholder {
     color: #a9a6c4;
 }
 
-#login-screen .login-field-group input:focus {
+body.light-theme #login-screen .login-field-group input:focus {
     border-color: rgba(124, 58, 237, 0.6);
     box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.12);
 }
 
-#login-screen .login-hint {
+body.light-theme #login-screen .login-hint {
     color: #a9a6c4;
 }
 
-#login-screen .btn-login {
+body.light-theme #login-screen .btn-login {
     background: linear-gradient(120deg, #4f46e5, #7c3aed);
     box-shadow: 0 8px 20px rgba(124, 58, 237, 0.28);
 }
 
-#login-screen .btn-login:hover {
+body.light-theme #login-screen .btn-login:hover {
+    box-shadow: 0 12px 28px rgba(124, 58, 237, 0.45);
+}
+
+/* Admin Login Modal Light Theme Overrides */
+body.light-theme #admin-login-modal {
+    background: rgba(15, 23, 42, 0.4);
+}
+
+body.light-theme #admin-login-modal .admin-modal-card {
+    background: rgba(255, 255, 255, 0.96);
+    border: 1px solid rgba(124, 58, 237, 0.22);
+    box-shadow: 0 20px 60px rgba(99, 102, 241, 0.18), 0 4px 16px rgba(0, 0, 0, 0.06);
+}
+
+body.light-theme #admin-login-modal .modal-brand i {
+    color: #7c3aed;
+}
+
+body.light-theme #admin-login-modal .modal-brand h3 {
+    color: #0f172a;
+}
+
+body.light-theme #admin-login-modal .modal-brand p {
+    color: #64748b;
+}
+
+body.light-theme #admin-login-modal .login-field-group label {
+    color: #334155;
+}
+
+body.light-theme #admin-login-modal .login-field-group input {
+    background: #f8fafc;
+    border: 1.5px solid #cbd5e1;
+    color: #0f172a;
+}
+
+body.light-theme #admin-login-modal .login-field-group input::placeholder {
+    color: #94a3b8;
+}
+
+body.light-theme #admin-login-modal .login-field-group input:focus {
+    border-color: #7c3aed;
+    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);
+}
+
+body.light-theme #admin-login-modal .admin-modal-error {
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #dc2626;
+}
+
+body.light-theme #admin-login-modal .btn-cancel-modal {
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    color: #475569;
+}
+
+body.light-theme #admin-login-modal .btn-cancel-modal:hover {
+    background: #e2e8f0;
+    color: #0f172a;
+}
+
+body.light-theme #admin-login-modal .btn-login {
+    background: linear-gradient(120deg, #4f46e5, #7c3aed);
+    color: #ffffff;
+    box-shadow: 0 8px 20px rgba(124, 58, 237, 0.28);
+}
+
+body.light-theme #admin-login-modal .btn-login:hover {
     box-shadow: 0 12px 28px rgba(124, 58, 237, 0.45);
 }
 
