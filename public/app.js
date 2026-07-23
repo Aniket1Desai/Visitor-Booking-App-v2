@@ -45,11 +45,83 @@ const timeSlots = [
 
 let allBookings = [];
 let currentRole = 'visitor';
-let allSchemes = [];
 let schemesCurrentPage = 1;
 const SCHEMES_PER_PAGE = 5;
 let visitorMap = null;
-const estateCoords = [18.9543, 72.8088];
+let visitorMapMarker = null;
+let bookingSuccessMap = null;
+let bookingSuccessMarker = null;
+let selectedLocationSchemeName = '';
+
+const DEFAULT_SCHEME_COORDS = {
+    'open nest': { lat: 34.0736, lng: -118.4007 },
+    'sunset cliffs estate': { lat: 34.0259, lng: -118.7798 },
+    'horizon penthouse suite': { lat: 34.0522, lng: -118.2437 },
+    'sakar onyx': { lat: 22.3168, lng: 73.2120 },
+    'skyline grand towers': { lat: 22.2858, lng: 73.1611 },
+    'lakeview signature homes': { lat: 22.3364, lng: 73.2081 },
+    'royal crest villas': { lat: 22.3150, lng: 73.1180 },
+    'emerald heights residency': { lat: 22.2902, lng: 73.1480 }
+};
+
+const LOCATION_KEYWORDS = [
+    { keyword: 'sangam', lat: 22.3168, lng: 73.2120 },
+    { keyword: 'akshar', lat: 22.2858, lng: 73.1611 },
+    { keyword: 'harni', lat: 22.3364, lng: 73.2081 },
+    { keyword: 'sevasi', lat: 22.3150, lng: 73.1180 },
+    { keyword: 'vasna', lat: 22.2902, lng: 73.1480 },
+    { keyword: 'vadodara', lat: 22.3072, lng: 73.1812 },
+    { keyword: 'malibu', lat: 34.0259, lng: -118.7798 },
+    { keyword: 'bel air', lat: 34.0736, lng: -118.4007 },
+    { keyword: 'downtown', lat: 34.0522, lng: -118.2437 }
+];
+
+const GLOBAL_FALLBACK_COORDS = { lat: 22.3072, lng: 73.1812 };
+
+const FALLBACK_DEFAULT_SCHEMES = [
+    { id: 1, name: 'Open Nest', address: 'Bel Air Cliffs, Los Angeles, CA', price: '$18.5 Million', viewing_rules: 'Pre-cleared VIPs only', description: 'Our flagship 14,200 sq ft smart tech architectural mansion in Bel Air cliffs.', latitude: 34.0736, longitude: -118.4007 },
+    { id: 2, name: 'Sunset Cliffs Estate', address: 'Pacific Coast Highway, Malibu, CA', price: '$12.4 Million', viewing_rules: 'Prior identification required', description: 'Breathtaking oceanfront estate featuring a private heated glass-bottom infinity pool.', latitude: 34.0259, longitude: -118.7798 },
+    { id: 3, name: 'Horizon Penthouse Suite', address: 'Downtown LA Financial District, CA', price: '$6.9 Million', viewing_rules: 'Accompanied agents only', description: 'Sleek, high-elevation sky penthouse with modern automation and floor-to-ceiling glass.', latitude: 34.0522, longitude: -118.2437 },
+    { id: 4, name: 'Sakar Onyx', address: 'Nr. Sangam Char Rasta, Vadodara', price: '₹10 Million', viewing_rules: 'Pre-approved visitors only', description: 'Premium residential flats.', latitude: 22.3168, longitude: 73.2120 },
+    { id: 5, name: 'Skyline Grand Towers', address: 'Akshar Chowk, Vadodara', price: '₹11.9 Million', viewing_rules: 'Pre-approved visitors only', description: 'High-rise premium residences with panoramic city views.', latitude: 22.2858, longitude: 73.1611 }
+];
+
+let allSchemes = [...FALLBACK_DEFAULT_SCHEMES];
+
+function getSchemeCoordinates(scheme) {
+    if (!scheme) return { ...GLOBAL_FALLBACK_COORDS, isDefault: true };
+
+    let lat = scheme.latitude !== undefined && scheme.latitude !== null && scheme.latitude !== '' ? parseFloat(scheme.latitude) : null;
+    let lng = scheme.longitude !== undefined && scheme.longitude !== null && scheme.longitude !== '' ? parseFloat(scheme.longitude) : null;
+
+    if (lat !== null && !isNaN(lat) && lng !== null && !isNaN(lng)) {
+        return { lat, lng, isDefault: false };
+    }
+
+    const sName = (scheme.name || '').toLowerCase().trim();
+    if (DEFAULT_SCHEME_COORDS[sName]) {
+        return {
+            lat: DEFAULT_SCHEME_COORDS[sName].lat,
+            lng: DEFAULT_SCHEME_COORDS[sName].lng,
+            isDefault: false
+        };
+    }
+
+    const addr = (scheme.address || '').toLowerCase();
+    for (const item of LOCATION_KEYWORDS) {
+        if (addr.includes(item.keyword) || sName.includes(item.keyword)) {
+            return { lat: item.lat, lng: item.lng, isDefault: false };
+        }
+    }
+
+    return { ...GLOBAL_FALLBACK_COORDS, isDefault: true };
+}
+
+function formatCoordinates(lat, lng) {
+    const latDir = lat >= 0 ? 'N' : 'S';
+    const lngDir = lng >= 0 ? 'E' : 'W';
+    return `${Math.abs(lat).toFixed(4)}° ${latDir}, ${Math.abs(lng).toFixed(4)}° ${lngDir}`;
+}
 
 document.addEventListener('DOMContentLoaded', () => {
     initDatePickers();
@@ -89,6 +161,8 @@ function initDatePickers() {
 }
 
 async function loadInitialData() {
+    populateSchemesDropdown();
+    renderSchemesTable();
     await refreshData();
     renderTimeSlots('booking_date', 'slots-container', 'selected_time');
 }
@@ -150,10 +224,10 @@ function showSection(sectionId) {
     }
 
     if (sectionId === 'location-section') {
-        setTimeout(() => {
-            initVisitorMap();
+        updateLocationPage();
+        requestAnimationFrame(() => {
             if (visitorMap) visitorMap.invalidateSize();
-        }, 100);
+        });
     } else if (sectionId === 'troubleshoot-section') {
         setTimeout(() => runTroubleshootDiagnostic(), 200);
     }
@@ -245,6 +319,8 @@ function nextStep(step) {
         bookingData.visitor_phone = phone.replace(/[\s-]/g, '');  // store clean digits
         bookingData.visitor_count = parseInt(document.getElementById('visitor_count').value);
         bookingData.scheme_name = scheme;
+        selectedLocationSchemeName = scheme;
+        updateLocationPage();
     }
 
     if (step === 3) {
@@ -303,22 +379,12 @@ async function refreshData() {
     try {
         await refreshSchemes();
 
-        const [bRes, sRes] = await Promise.all([
-            fetch('/api/bookings'),
-            fetch('/api/stats')
-        ]);
-
+        const bRes = await fetch('/api/bookings');
         const bookingsRes = await bRes.json();
-        const statsRes = await sRes.json();
 
         allBookings = bookingsRes.data || [];
 
-        document.getElementById('stat-total-bookings').textContent = statsRes.stats.totalBookings;
-        document.getElementById('stat-total-visitors').textContent = statsRes.stats.totalVisitors;
-        document.getElementById('stat-upcoming').textContent = statsRes.stats.upcomingTours;
-        document.getElementById('stat-cancelled').textContent = statsRes.stats.cancelledBookings;
-
-        renderBookingsTable();
+        filterBookings();
 
     } catch (err) {
         console.error('Refresh operations failed', err);
@@ -346,6 +412,27 @@ async function submitBooking() {
         currentStep = 'success';
         updateStepUI();
         showToast("Booking Successful", "Your viewing tour has been booked successfully.", "success");
+
+        // Update success modal map for booked scheme
+        const bookedScheme = allSchemes.find(s => (s.name || '').toLowerCase() === (bookingData.scheme_name || '').toLowerCase());
+        const bookedCoords = getSchemeCoordinates(bookedScheme);
+
+        setTimeout(() => {
+            const successMapContainer = document.getElementById('booking-success-map');
+            if (successMapContainer) {
+                if (!bookingSuccessMap) {
+                    bookingSuccessMap = L.map('booking-success-map', { zoomControl: false, attributionControl: false }).setView([bookedCoords.lat, bookedCoords.lng], 14);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(bookingSuccessMap);
+                } else {
+                    bookingSuccessMap.setView([bookedCoords.lat, bookedCoords.lng], 14);
+                }
+                if (bookingSuccessMarker) bookingSuccessMap.removeLayer(bookingSuccessMarker);
+                bookingSuccessMarker = L.marker([bookedCoords.lat, bookedCoords.lng]).addTo(bookingSuccessMap)
+                    .bindPopup(`<b>${escapeHtml(bookingData.scheme_name)}</b><br>${escapeHtml(bookedScheme ? bookedScheme.address : '')}`)
+                    .openPopup();
+                bookingSuccessMap.invalidateSize();
+            }
+        }, 150);
 
         await refreshData();
 
@@ -421,39 +508,81 @@ async function cancelBooking(id, name) {
 }
 
 function parseBookingDateTime(dateStr, timeStr) {
-    if (!dateStr || !timeStr) return new Date(0);
-    const match = timeStr.match(/^(\d{2}):(\d{2})\s*(AM|PM)$/i);
+    if (!dateStr) return new Date(0);
+    if (!timeStr) return new Date(`${dateStr}T23:59:59`);
+    const match = String(timeStr).match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
     if (!match) {
-        return new Date(`${dateStr}T${timeStr}`);
+        const d = new Date(`${dateStr}T${timeStr}`);
+        if (!isNaN(d.getTime())) return d;
+        return new Date(`${dateStr}T23:59:59`);
     }
     let hours = parseInt(match[1], 10);
     const minutes = parseInt(match[2], 10);
-    const ampm = match[3].toUpperCase();
-    
+    const ampm = match[3] ? match[3].toUpperCase() : null;
+
     if (ampm === 'PM' && hours < 12) {
         hours += 12;
     } else if (ampm === 'AM' && hours === 12) {
         hours = 0;
     }
-    
+
     const hh = String(hours).padStart(2, '0');
     const mm = String(minutes).padStart(2, '0');
     return new Date(`${dateStr}T${hh}:${mm}:00`);
 }
 
-function renderBookingsTable(filteredBookings = allBookings) {
+function updateDashboardStats(gridBookings) {
+    const totalBookings = gridBookings.length;
+    const totalVisitors = gridBookings.reduce((sum, b) => sum + (parseInt(b.visitor_count) || 0), 0);
+    const upcomingTours = gridBookings.filter(b => b.status !== 'Cancelled').length;
+    const cancelledTours = gridBookings.filter(b => b.status === 'Cancelled').length;
+
+    const totalEl = document.getElementById('stat-total-bookings');
+    const visitorsEl = document.getElementById('stat-total-visitors');
+    const upcomingEl = document.getElementById('stat-upcoming');
+    const cancelledEl = document.getElementById('stat-cancelled');
+
+    if (totalEl) totalEl.textContent = totalBookings;
+    if (visitorsEl) visitorsEl.textContent = totalVisitors;
+    if (upcomingEl) upcomingEl.textContent = upcomingTours;
+    if (cancelledEl) cancelledEl.textContent = cancelledTours;
+}
+
+function getFilteredBookings() {
+    const now = new Date();
+    const input = document.getElementById('search-input');
+    const searchVal = input ? input.value.toLowerCase().trim() : '';
+
+    // Only active and upcoming bookings (scheduled date/time >= current date/time)
+    const activeUpcoming = allBookings.filter(b => {
+        const dt = parseBookingDateTime(b.booking_date, b.booking_time);
+        return dt >= now;
+    });
+
+    if (!searchVal) {
+        return activeUpcoming;
+    }
+
+    return activeUpcoming.filter(b =>
+        (b.visitor_name || '').toLowerCase().includes(searchVal) ||
+        (b.visitor_email || '').toLowerCase().includes(searchVal) ||
+        (b.visitor_phone || '').toLowerCase().includes(searchVal) ||
+        (b.scheme_name || '').toLowerCase().includes(searchVal) ||
+        (b.booking_date || '').includes(searchVal) ||
+        (b.booking_time || '').toLowerCase().includes(searchVal) ||
+        (b.status || '').toLowerCase().includes(searchVal)
+    );
+}
+
+function renderBookingsTable(filteredBookings = getFilteredBookings()) {
     const tbody = document.getElementById('bookings-tbody');
     if (!tbody) return;
 
     tbody.innerHTML = '';
 
-    const now = new Date();
-    const upcomingBookings = filteredBookings.filter(b => {
-        const bookingDateTime = parseBookingDateTime(b.booking_date, b.booking_time);
-        return bookingDateTime >= now;
-    });
+    updateDashboardStats(filteredBookings);
 
-    if (upcomingBookings.length === 0) {
+    if (filteredBookings.length === 0) {
         tbody.innerHTML = `
             <tr>
                 <td colspan="7" class="text-center py-5 text-muted">
@@ -465,7 +594,7 @@ function renderBookingsTable(filteredBookings = allBookings) {
         return;
     }
 
-    upcomingBookings.forEach(booking => {
+    filteredBookings.forEach(booking => {
         const tr = document.createElement('tr');
 
         let badgeClass = 'badge-confirmed';
@@ -508,20 +637,7 @@ function renderBookingsTable(filteredBookings = allBookings) {
 }
 
 function filterBookings() {
-    const searchVal = document.getElementById('search-input').value.toLowerCase().trim();
-
-    if (!searchVal) {
-        renderBookingsTable(allBookings);
-        return;
-    }
-
-    const filtered = allBookings.filter(b =>
-        b.visitor_name.toLowerCase().includes(searchVal) ||
-        b.visitor_email.toLowerCase().includes(searchVal) ||
-        b.booking_date.includes(searchVal)
-    );
-
-    renderBookingsTable(filtered);
+    renderBookingsTable(getFilteredBookings());
 }
 
 
@@ -709,45 +825,167 @@ async function refreshSchemes() {
             console.warn('GET /api/schemes returned', res.status, '— details:', schemesRes.details || schemesRes.error);
         }
 
-        allSchemes = Array.isArray(schemesRes.data) ? schemesRes.data : [];
+        const fetched = Array.isArray(schemesRes.data) && schemesRes.data.length > 0 ? schemesRes.data : [];
+        if (fetched.length > 0) {
+            allSchemes = fetched;
+        } else if (!allSchemes || allSchemes.length === 0) {
+            allSchemes = [...FALLBACK_DEFAULT_SCHEMES];
+        }
 
         populateSchemesDropdown();
         renderSchemesTable();
 
     } catch (err) {
         console.error("Refresh schemes pipeline failed:", err);
-        allSchemes = [];
+        if (!allSchemes || allSchemes.length === 0) {
+            allSchemes = [...FALLBACK_DEFAULT_SCHEMES];
+        }
         populateSchemesDropdown();
         renderSchemesTable();
-        showToast("Unable to Load Schemes", "Unable to load property schemes. Please try again.", "error");
     }
 }
 
 function populateSchemesDropdown() {
     const dropdown = document.getElementById('booking_scheme');
-    if (!dropdown) return;
+    const locationDropdown = document.getElementById('location-scheme-select');
 
-    const previousValue = dropdown.value;
+    const previousBookingValue = dropdown ? dropdown.value : '';
+    const previousLocationValue = locationDropdown ? locationDropdown.value : '';
 
-    dropdown.innerHTML = '';
+    if (dropdown) {
+        dropdown.innerHTML = '';
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.disabled = true;
+        placeholder.selected = true;
+        placeholder.textContent = 'Select House Scheme / Property *';
+        dropdown.appendChild(placeholder);
 
-    const placeholder = document.createElement('option');
-    placeholder.value = '';
-    placeholder.disabled = true;
-    placeholder.selected = true;
-    placeholder.textContent = 'Select House Scheme / Property *';
-    dropdown.appendChild(placeholder);
+        allSchemes.forEach(s => {
+            const option = document.createElement('option');
+            option.value = s.name || '';
+            option.textContent = `${s.name || 'Unknown'} (${s.price || 'N/A'})`;
+            dropdown.appendChild(option);
+        });
 
-    allSchemes.forEach(s => {
-        const option = document.createElement('option');
-        option.value = s.name || '';
-        option.textContent = `${s.name || 'Unknown'} (${s.price || 'N/A'})`;
-        dropdown.appendChild(option);
-    });
-
-    if (previousValue && allSchemes.some(s => s.name === previousValue)) {
-        dropdown.value = previousValue;
+        if (previousBookingValue && allSchemes.some(s => s.name === previousBookingValue)) {
+            dropdown.value = previousBookingValue;
+        }
     }
+
+    if (locationDropdown) {
+        locationDropdown.innerHTML = '';
+        if (!allSchemes || allSchemes.length === 0) {
+            const opt = document.createElement('option');
+            opt.value = '';
+            opt.textContent = 'No schemes available';
+            locationDropdown.appendChild(opt);
+        } else {
+            allSchemes.forEach(s => {
+                const option = document.createElement('option');
+                option.value = s.name || '';
+                option.textContent = `${s.name || 'Unknown'} — ${s.address || 'Address pending'} (${s.price || 'N/A'})`;
+                locationDropdown.appendChild(option);
+            });
+
+            let schemeToSelect = selectedLocationSchemeName || previousLocationValue || (allSchemes[0] ? allSchemes[0].name : '');
+            if (!allSchemes.some(s => s.name === schemeToSelect)) {
+                schemeToSelect = allSchemes[0] ? allSchemes[0].name : '';
+            }
+            if (schemeToSelect) {
+                locationDropdown.value = schemeToSelect;
+                selectedLocationSchemeName = schemeToSelect;
+            }
+        }
+    }
+
+    try {
+        updateLocationPage();
+    } catch (e) {
+        console.warn("Location update warning:", e);
+    }
+}
+
+function onLocationSchemeSelectChange(schemeName) {
+    selectedLocationSchemeName = schemeName;
+    updateLocationPage();
+}
+
+function getActiveLocationScheme() {
+    if (!allSchemes || allSchemes.length === 0) return null;
+    let scheme = allSchemes.find(s => (s.name || '').toLowerCase() === (selectedLocationSchemeName || '').toLowerCase());
+    if (!scheme) scheme = allSchemes[0];
+    return scheme;
+}
+
+function updateLocationPage() {
+    const scheme = getActiveLocationScheme();
+    if (!scheme) return;
+
+    selectedLocationSchemeName = scheme.name;
+
+    const locSelect = document.getElementById('location-scheme-select');
+    if (locSelect && locSelect.value !== scheme.name) {
+        locSelect.value = scheme.name;
+    }
+
+    // Update Text Details
+    const titleEl = document.getElementById('location-scheme-title');
+    const addressEl = document.getElementById('location-scheme-address');
+    const descEl = document.getElementById('location-scheme-desc');
+    const badgesEl = document.getElementById('location-scheme-badges');
+    const coordsEl = document.getElementById('location-coords');
+    const travelEl = document.getElementById('location-travel-time');
+    const statusContainer = document.getElementById('location-status-container');
+
+    if (titleEl) titleEl.textContent = scheme.name || 'Property Estate';
+    if (addressEl) {
+        addressEl.innerHTML = `<i class="fa-solid fa-location-dot" style="color: var(--accent-cyan); margin-right: 6px;"></i><span>${escapeHtml(scheme.address || 'Bel Air Cliffs, Los Angeles, CA')}</span>`;
+    }
+    if (descEl) {
+        descEl.textContent = scheme.description || 'A private gated road access reserved strictly for scheduled visitors.';
+    }
+
+    const coords = getSchemeCoordinates(scheme);
+    if (coordsEl) {
+        coordsEl.textContent = formatCoordinates(coords.lat, coords.lng);
+    }
+    if (travelEl) {
+        travelEl.textContent = scheme.address ? `Direct route to ${scheme.address}` : '25 mins from Vadodara Airport';
+    }
+
+    if (statusContainer) {
+        if (coords.isDefault) {
+            statusContainer.innerHTML = `<span class="status-badge" style="background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.3); color: #F59E0B; font-size: 0.76rem;"><i class="fa-solid fa-triangle-exclamation"></i> Approximate Location</span>`;
+        } else {
+            statusContainer.innerHTML = `<span class="status-badge" style="background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.3); color: #10B981; font-size: 0.76rem;"><i class="fa-solid fa-circle-check"></i> Synchronized Coordinates</span>`;
+        }
+    }
+
+    if (badgesEl) {
+        badgesEl.innerHTML = `
+            <span class="spec-tag" style="font-weight:600; color:var(--accent-cyan); border-color:rgba(6,182,212,0.25); background:rgba(6,182,212,0.08); padding: 4px 10px; font-size: 0.78rem;">
+                <i class="fa-solid fa-tag"></i> ${escapeHtml(scheme.price || 'Custom Pricing')}
+            </span>
+            <span class="status-badge" style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.25); color: var(--accent-violet); font-size: 0.78rem; padding: 4px 10px;">
+                <i class="fa-solid fa-shield-halved"></i> ${escapeHtml(scheme.viewing_rules || 'Pre-cleared Access')}
+            </span>
+        `;
+    }
+
+    initVisitorMap(coords, scheme);
+}
+
+function reserveSelectedLocationScheme() {
+    const scheme = getActiveLocationScheme();
+    if (scheme) {
+        const bookingSelect = document.getElementById('booking_scheme');
+        if (bookingSelect && Array.from(bookingSelect.options).some(o => o.value === scheme.name)) {
+            bookingSelect.value = scheme.name;
+            bookingData.scheme_name = scheme.name;
+        }
+    }
+    showSection('booking-section');
 }
 
 // Returns schemes matching the search box (name, address, price, restrictions, description)
@@ -772,7 +1010,6 @@ function renderSchemesTable() {
     const total = list.length;
     const totalPages = Math.max(1, Math.ceil(total / SCHEMES_PER_PAGE));
 
-    // keep the current page in range (e.g. after deleting or filtering)
     if (schemesCurrentPage > totalPages) schemesCurrentPage = totalPages;
     if (schemesCurrentPage < 1) schemesCurrentPage = 1;
 
@@ -786,7 +1023,7 @@ function renderSchemesTable() {
                 <td colspan="5" class="text-center py-4 text-muted">
                     ${searching
                 ? 'No schemes match your search criteria.'
-                : 'No active property viewing tiers mapped in database.'}
+                : 'No property schemes available.'}
                 </td>
             </tr>
         `;
@@ -800,20 +1037,116 @@ function renderSchemesTable() {
     list.slice(start, end).forEach(s => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td><strong>${escapeHtml(s.name || '')}</strong></td>
-            <td><span class="text-muted"><i class="fa-solid fa-location-dot" style="margin-right: 4px; font-size: 0.85em;"></i>${escapeHtml(s.address || 'Address not provided')}</span></td>
-            <td><span class="spec-tag" style="font-weight:600; color:var(--accent-cyan); border-color:rgba(6,182,212,0.25); background:rgba(6,182,212,0.06);">${escapeHtml(s.price || '')}</span></td>
             <td>
-                <span class="status-badge" style="background: rgba(139, 92, 246, 0.08); border: 1px solid rgba(139, 92, 246, 0.2); color: var(--accent-violet); font-size: 0.78rem;">
-                    <i class="fa-solid fa-shield-halved" style="font-size:0.75rem; margin-right:3px;"></i> ${escapeHtml(s.viewing_rules || 'Pre-cleared VIPs')}
+                <strong>
+                    <i class="fa-solid fa-building" style="color: var(--accent-violet); margin-right: 6px; font-size: 0.85em;"></i>
+                    ${escapeHtml(s.name || '')}
+                </strong>
+            </td>
+            <td>
+                <span class="text-muted">
+                    <i class="fa-solid fa-location-dot" style="color: var(--accent-cyan); margin-right: 6px; font-size: 0.85em;"></i>
+                    ${escapeHtml(s.address || 'Address pending')}
                 </span>
             </td>
-            <td><div class="input-helper" style="white-space: normal; line-height: 1.4; font-size:0.8rem; color:var(--text-secondary); max-width:280px;">${escapeHtml(s.description || 'Exclusive accompanied tour tier.')}</div></td>
+            <td>
+                <span style="font-weight: 600; color: var(--text-primary);">
+                    <i class="fa-solid fa-tag" style="color: var(--accent-cyan); margin-right: 5px; font-size: 0.85em;"></i>
+                    ${escapeHtml(s.price || 'N/A')}
+                </span>
+            </td>
+            <td>
+                <span style="font-size: 0.84rem; color: var(--text-secondary);">
+                    <i class="fa-solid fa-shield-halved" style="color: var(--accent-violet); margin-right: 5px; font-size: 0.85em;"></i>
+                    ${escapeHtml(s.viewing_rules || 'Standard rules')}
+                </span>
+            </td>
+            <td><div class="input-helper" style="white-space: normal; line-height: 1.4; font-size: 0.82rem; color: var(--text-secondary); max-width: 260px;">${escapeHtml(s.description || '-')}</div></td>
         `;
         tbody.appendChild(tr);
     });
 
     renderSchemesPagination(total, totalPages, start, end);
+}
+
+function openEditSchemeModal(id) {
+    const scheme = allSchemes.find(s => String(s.id) === String(id));
+    if (!scheme) return;
+
+    document.getElementById('edit-scheme-id').value = scheme.id;
+    document.getElementById('edit-scheme-name').value = scheme.name || '';
+    document.getElementById('edit-scheme-address').value = scheme.address || '';
+    document.getElementById('edit-scheme-lat').value = scheme.latitude || '';
+    document.getElementById('edit-scheme-lng').value = scheme.longitude || '';
+    document.getElementById('edit-scheme-price').value = scheme.price || '';
+    document.getElementById('edit-scheme-rules').value = scheme.viewing_rules || '';
+    document.getElementById('edit-scheme-desc').value = scheme.description || '';
+
+    const modal = document.getElementById('edit-scheme-modal');
+    if (modal) modal.classList.add('open');
+}
+
+function closeEditSchemeModal() {
+    const modal = document.getElementById('edit-scheme-modal');
+    if (modal) modal.classList.remove('open');
+}
+
+async function submitEditScheme(e) {
+    if (e) e.preventDefault();
+    const id = document.getElementById('edit-scheme-id').value;
+    const name = document.getElementById('edit-scheme-name').value.trim();
+    const address = document.getElementById('edit-scheme-address').value.trim();
+    const latitude = document.getElementById('edit-scheme-lat').value.trim();
+    const longitude = document.getElementById('edit-scheme-lng').value.trim();
+    const price = document.getElementById('edit-scheme-price').value.trim();
+    const viewing_rules = document.getElementById('edit-scheme-rules').value.trim();
+    const description = document.getElementById('edit-scheme-desc').value.trim();
+
+    if (!name || !price || !address) {
+        showToast("Validation Error", "Name, address, and price are required.", "error");
+        return;
+    }
+
+    const btnSubmit = document.getElementById('btn-confirm-edit-scheme');
+    if (btnSubmit) {
+        btnSubmit.disabled = true;
+        btnSubmit.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Saving...`;
+    }
+
+    try {
+        const response = await fetch(`/api/schemes/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, address, latitude, longitude, price, viewing_rules, description })
+        });
+
+        if (!response.ok) throw new Error("Failed to update property scheme.");
+
+        closeEditSchemeModal();
+        showToast("Scheme Updated", `Property scheme "${name}" updated successfully.`, "success");
+        await refreshSchemes();
+    } catch (err) {
+        showToast("Update Failed", err.message, "error");
+    } finally {
+        if (btnSubmit) {
+            btnSubmit.disabled = false;
+            btnSubmit.innerHTML = `Save Changes`;
+        }
+    }
+}
+
+async function deleteScheme(id, name) {
+    if (!confirm(`Are you sure you want to delete the property scheme "${name}"?`)) return;
+
+    try {
+        const response = await fetch(`/api/schemes/${id}`, { method: 'DELETE' });
+        if (!response.ok) throw new Error("Server failed to delete scheme.");
+
+        showToast("Scheme Deleted", `Property scheme "${name}" has been deleted.`, "info-theme");
+        await refreshSchemes();
+    } catch (err) {
+        showToast("Delete Failed", err.message, "error");
+    }
 }
 
 function renderSchemesPagination(total, totalPages, start, end) {
@@ -859,6 +1192,8 @@ async function submitScheme(e) {
 
     const nameInput = document.getElementById('scheme_name_input');
     const addressInput = document.getElementById('scheme_address_input');
+    const latInput = document.getElementById('scheme_lat_input');
+    const lngInput = document.getElementById('scheme_lng_input');
     const priceInput = document.getElementById('scheme_price_input');
     const rulesInput = document.getElementById('scheme_rules_input');
     const descInput = document.getElementById('scheme_desc_input');
@@ -866,6 +1201,8 @@ async function submitScheme(e) {
 
     const name = nameInput.value.trim();
     const address = addressInput.value.trim();
+    const latitude = latInput ? latInput.value.trim() : '';
+    const longitude = lngInput ? lngInput.value.trim() : '';
     const price = priceInput.value.trim();
     const viewing_rules = rulesInput.value.trim();
     const description = descInput.value.trim();
@@ -882,7 +1219,7 @@ async function submitScheme(e) {
         const response = await fetch('/api/schemes', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, address, price, viewing_rules, description })
+            body: JSON.stringify({ name, address, latitude, longitude, price, viewing_rules, description })
         });
 
         if (response.status === 409) throw new Error("A scheme with this property name already exists.");
@@ -901,23 +1238,53 @@ async function submitScheme(e) {
     }
 }
 
-function initVisitorMap() {
-    if (visitorMap) return;
+function initVisitorMap(coordsOverride, schemeOverride) {
     const container = document.getElementById('visitor-map');
     if (!container) return;
 
-    visitorMap = L.map('visitor-map', { zoomControl: true, attributionControl: true }).setView(estateCoords, 14);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '\u00a9 <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-    }).addTo(visitorMap);
+    const scheme = schemeOverride || getActiveLocationScheme();
+    const coords = coordsOverride || getSchemeCoordinates(scheme);
+    const targetLatLng = [coords.lat, coords.lng];
 
-    L.marker(estateCoords).addTo(visitorMap).bindPopup(`
-        <div style="font-family: 'Outfit', sans-serif; color: #1e293b; padding: 4px;">
-            <h5 style="margin: 0 0 4px 0; font-size: 14px; font-weight: 600; color: #0f172a;">Open Nest Estate</h5>
-            <p style="margin: 0; font-size: 11px; color: #64748b;">Malabar Hill, Mumbai, Maharashtra 400006</p>
+    if (!visitorMap) {
+        visitorMap = L.map('visitor-map', {
+            zoomControl: true,
+            attributionControl: true,
+            fadeAnimation: false,
+            zoomAnimation: true
+        }).setView(targetLatLng, 15);
+
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+            maxZoom: 19,
+            subdomains: 'abcd',
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+        }).addTo(visitorMap);
+    } else {
+        visitorMap.setView(targetLatLng, 15, { animate: false });
+    }
+
+    if (visitorMapMarker) {
+        visitorMap.removeLayer(visitorMapMarker);
+    }
+
+    const popupHtml = `
+        <div style="font-family: 'Outfit', sans-serif; color: #1e293b; padding: 6px; min-width: 180px;">
+            <h5 style="margin: 0 0 4px 0; font-size: 14px; font-weight: 700; color: #0f172a;">${escapeHtml(scheme ? scheme.name : 'Open Nest Estate')}</h5>
+            <p style="margin: 0 0 6px 0; font-size: 11px; color: #475569; line-height: 1.3;">${escapeHtml(scheme ? scheme.address : 'Bel Air, Los Angeles, CA')}</p>
+            <div style="font-size: 11px; font-weight: 600; color: #7c3aed; background: #f1f5f9; padding: 3px 8px; border-radius: 4px; display: inline-block;">
+                ${escapeHtml(scheme ? scheme.price : '')}
+            </div>
         </div>
-    `).openPopup();
+    `;
+
+    visitorMapMarker = L.marker(targetLatLng).addTo(visitorMap).bindPopup(popupHtml);
+    visitorMapMarker.openPopup();
+
+    requestAnimationFrame(() => {
+        if (visitorMap) {
+            visitorMap.invalidateSize();
+        }
+    });
 }
 
 let tsLastSyncTime = null;

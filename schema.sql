@@ -17,6 +17,8 @@ CREATE TABLE schemes (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     address VARCHAR(250) NULL,
+    latitude DECIMAL(10, 8) NULL,
+    longitude DECIMAL(11, 8) NULL,
     price VARCHAR(50) NOT NULL,
     viewing_rules VARCHAR(250) NULL,
     description VARCHAR(500) NULL,
@@ -43,11 +45,11 @@ CREATE INDEX IX_bookings_date_time ON bookings(booking_date, booking_time);
 CREATE INDEX IX_bookings_email ON bookings(visitor_email);
 
 -- 6. Seed initial house schemes
-INSERT INTO schemes (name, address, price, viewing_rules, description)
+INSERT INTO schemes (name, address, latitude, longitude, price, viewing_rules, description)
 VALUES
-('Open Nest', 'Bel Air Cliffs, Los Angeles, CA', '$18.5 Million', 'Pre-cleared VIPs only', 'Our flagship 14,200 sq ft smart tech architectural mansion in Bel Air cliffs.'),
-('Sunset Cliffs Estate', 'Pacific Coast Highway, Malibu, CA', '$12.4 Million', 'Prior identification required', 'Breathtaking oceanfront estate featuring a private heated glass-bottom infinity pool.'),
-('Horizon Penthouse Suite', 'Downtown LA Financial District, CA', '$6.9 Million', 'Accompanied agents only', 'Sleek, high-elevation sky penthouse with modern automation and floor-to-ceiling glass.');
+('Open Nest', 'Bel Air Cliffs, Los Angeles, CA', 34.0736, -118.4007, '$18.5 Million', 'Pre-cleared VIPs only', 'Our flagship 14,200 sq ft smart tech architectural mansion in Bel Air cliffs.'),
+('Sunset Cliffs Estate', 'Pacific Coast Highway, Malibu, CA', 34.0259, -118.7798, '$12.4 Million', 'Prior identification required', 'Breathtaking oceanfront estate featuring a private heated glass-bottom infinity pool.'),
+('Horizon Penthouse Suite', 'Downtown LA Financial District, CA', 34.0522, -118.2437, '$6.9 Million', 'Accompanied agents only', 'Sleek, high-elevation sky penthouse with modern automation and floor-to-ceiling glass.');
 
 -- 7. Seed initial booking records
 INSERT INTO bookings (visitor_name, visitor_email, visitor_phone, booking_date, booking_time, visitor_count, scheme_name, special_requests, status)

@@ -1150,6 +1150,19 @@
                                     booking.</p>
                             </div>
 
+                            <div class="form-row mb-20" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                                <div class="form-group">
+                                    <label for="scheme_lat_input">Latitude Coordinates</label>
+                                    <input type="number" step="any" id="scheme_lat_input" class="glass-input"
+                                        placeholder="e.g. 34.0736">
+                                </div>
+                                <div class="form-group">
+                                    <label for="scheme_lng_input">Longitude Coordinates</label>
+                                    <input type="number" step="any" id="scheme_lng_input" class="glass-input"
+                                        placeholder="e.g. -118.4007">
+                                </div>
+                            </div>
+
                             <div class="form-group mb-20">
                                 <label for="scheme_price_input">Base Price Label <span class="required">*</span></label>
                                 <input type="text" id="scheme_price_input" class="glass-input"
@@ -1177,9 +1190,8 @@
                         <div class="card-header"
                             style="display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:18px;">
                             <div>
-                                <h3 style="margin:0 0 4px;">Active Viewing Tiers</h3>
-                                <p class="text-secondary" style="margin:0;">Current property configuration schemes
-                                    mapped in database.</p>
+                                <h3 style="margin:0 0 4px;">Property Schemes</h3>
+                                <p class="text-secondary" style="margin:0;">Manage and view all registered property viewing schemes.</p>
                             </div>
                             <div class="search-wrapper"
                                 style="display:flex; align-items:center; gap:8px; background:var(--field-bg); border:1px solid var(--glass-border); border-radius:12px; padding:0 12px; min-width:220px; max-width:300px; width:100%;">
@@ -1195,17 +1207,17 @@
                             <table class="glass-table">
                                 <thead>
                                     <tr>
-                                        <th>Property Scheme</th>
+                                        <th>Scheme Name</th>
                                         <th>Address</th>
-                                        <th>Price Tag</th>
-                                        <th>Restrictions</th>
+                                        <th>Price</th>
+                                        <th>Viewing Rules</th>
                                         <th>Description</th>
                                     </tr>
                                 </thead>
                                 <tbody id="schemes-tbody">
                                     <tr>
                                         <td colspan="5" class="text-center py-3 text-muted">
-                                            <i class="fa-solid fa-circle-notch fa-spin"></i> Loading active schemes...
+                                            <i class="fa-solid fa-circle-notch fa-spin"></i> Loading property schemes...
                                         </td>
                                     </tr>
                                 </tbody>
@@ -1225,11 +1237,20 @@
             <section id="location-section" class="app-section">
                 <div class="section-header text-center">
                     <h2 class="section-title">Property <span class="gradient-text">Location</span></h2>
-                    <p class="section-subtitle">Stunning sunset cliffs of Bel Air, California. Accompanied travel
-                        arrangements are standard.</p>
+                    <p class="section-subtitle" id="location-header-subtitle">Interactive map and location coordinates synchronized with house schemes.</p>
                 </div>
 
                 <div class="location-container glass-panel">
+                    <div class="location-select-bar mb-20" style="margin-bottom: 20px;">
+                        <label for="location-scheme-select" style="display: flex; align-items: center; font-size: 0.88rem; font-weight: 600; margin-bottom: 8px; color: var(--text-primary);">
+                            <i class="fa-solid fa-building-circle-check" style="color: var(--accent-violet); margin-right: 8px; font-size: 1.1rem;"></i>
+                            Select Property / House Scheme:
+                        </label>
+                        <select id="location-scheme-select" class="glass-input" onchange="onLocationSchemeSelectChange(this.value)" style="width: 100%; font-size: 0.95rem; font-weight: 600; padding: 12px 16px;">
+                            <option value="" disabled selected>Loading property schemes...</option>
+                        </select>
+                    </div>
+
                     <div class="location-grid">
                         <div class="location-map-mockup" style="position: relative; overflow: hidden; padding: 0;">
                             <div id="visitor-map"
@@ -1237,23 +1258,34 @@
                             </div>
                         </div>
                         <div class="location-details">
-                            <h3>Estate Coordinates</h3>
-                            <p class="text-muted">A private gated road access reserved strictly for scheduled visitors.
-                                Helipad and security gate arrangements available upon demand.</p>
+                            <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px;">
+                                <h3 id="location-scheme-title" style="margin: 0;">Estate Location</h3>
+                                <div id="location-status-container"></div>
+                            </div>
+                            <p class="text-muted" id="location-scheme-address" style="margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+                                <i class="fa-solid fa-location-dot" style="color: var(--accent-cyan);"></i>
+                                <span>Bel Air Cliffs, Los Angeles, CA</span>
+                            </p>
+
+                            <div id="location-scheme-badges" style="margin-bottom: 16px; display: flex; gap: 8px; flex-wrap: wrap;"></div>
+
+                            <p id="location-scheme-desc" style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 18px; line-height: 1.5;">
+                                A private gated road access reserved strictly for scheduled visitors.
+                            </p>
 
                             <div class="coord-info">
                                 <div class="coord-item glass-panel">
-                                    <strong>Coordinates:</strong> <span>34.0736° N, 118.4007° W</span>
+                                    <strong>Coordinates:</strong> <span id="location-coords">34.0736° N, 118.4007° W</span>
                                 </div>
                                 <div class="coord-item glass-panel">
-                                    <strong>Travel Time:</strong> <span>25 mins from Vadodara Airport</span>
+                                    <strong>Travel Time:</strong> <span id="location-travel-time">25 mins from Vadodara Airport</span>
                                 </div>
                                 <div class="coord-item glass-panel">
-                                    <strong>Security Protocols:</strong> <span>Class-A pre-clearance required</span>
+                                    <strong>Security Protocols:</strong> <span id="location-security-notes">Class-A pre-clearance required</span>
                                 </div>
                             </div>
 
-                            <button class="btn-primary btn-glow" onclick="showSection('booking-section')">
+                            <button class="btn-primary btn-glow" id="location-reserve-btn" onclick="reserveSelectedLocationScheme()" style="margin-top: 10px;">
                                 <i class="fa-solid fa-compass"></i> Reserve Tour Access Route
                             </button>
                         </div>
@@ -1412,6 +1444,53 @@
                     <button class="btn-secondary" onclick="closeRescheduleModal()">Cancel</button>
                     <button class="btn-primary btn-glow" id="btn-confirm-reschedule"
                         onclick="submitReschedule()">Confirm Reschedule</button>
+        </div>
+
+        <!-- EDIT SCHEME DIALOG (MODAL) -->
+        <div class="modal-backdrop" id="edit-scheme-modal">
+            <div class="modal-card glass-panel" style="max-width: 520px;">
+                <div class="modal-header">
+                    <h3><i class="fa-solid fa-pen-to-square icon-cyan"></i> Edit Property Scheme</h3>
+                    <button class="btn-close" onclick="closeEditSchemeModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <form id="edit-scheme-form" onsubmit="submitEditScheme(event)">
+                        <input type="hidden" id="edit-scheme-id">
+                        <div class="form-group mb-15">
+                            <label for="edit-scheme-name">Property Name <span class="required">*</span></label>
+                            <input type="text" id="edit-scheme-name" class="glass-input" required>
+                        </div>
+                        <div class="form-group mb-15">
+                            <label for="edit-scheme-address">Address <span class="required">*</span></label>
+                            <input type="text" id="edit-scheme-address" class="glass-input" required>
+                        </div>
+                        <div class="form-row mb-15" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                            <div class="form-group">
+                                <label for="edit-scheme-lat">Latitude</label>
+                                <input type="number" step="any" id="edit-scheme-lat" class="glass-input">
+                            </div>
+                            <div class="form-group">
+                                <label for="edit-scheme-lng">Longitude</label>
+                                <input type="number" step="any" id="edit-scheme-lng" class="glass-input">
+                            </div>
+                        </div>
+                        <div class="form-group mb-15">
+                            <label for="edit-scheme-price">Price Label <span class="required">*</span></label>
+                            <input type="text" id="edit-scheme-price" class="glass-input" required>
+                        </div>
+                        <div class="form-group mb-15">
+                            <label for="edit-scheme-rules">Viewing Rules</label>
+                            <input type="text" id="edit-scheme-rules" class="glass-input">
+                        </div>
+                        <div class="form-group mb-15">
+                            <label for="edit-scheme-desc">Description</label>
+                            <textarea id="edit-scheme-desc" class="glass-input" rows="3"></textarea>
+                        </div>
+                        <div class="modal-footer" style="padding: 15px 0 0 0; margin-top: 15px; border-top: 1px solid var(--glass-border); display: flex; justify-content: flex-end; gap: 10px;">
+                            <button type="button" class="btn-secondary" onclick="closeEditSchemeModal()">Cancel</button>
+                            <button type="submit" class="btn-primary btn-glow" id="btn-confirm-edit-scheme">Save Changes</button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>

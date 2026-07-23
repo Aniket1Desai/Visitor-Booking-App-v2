@@ -264,7 +264,7 @@ async function getAllSchemes() {
  * Create a new property scheme in SharePoint.
  */
 async function createScheme(data) {
-    const { name, address, price, viewing_rules, description } = data;
+    const { name, address, latitude, longitude, price, viewing_rules, description } = data;
 
     // Duplicate name check
     const { data: existing } = await getAllSchemes();
@@ -278,6 +278,8 @@ async function createScheme(data) {
         data: {
             name,
             address: address || '',
+            latitude: latitude !== undefined && latitude !== null && latitude !== '' ? Number(latitude) : null,
+            longitude: longitude !== undefined && longitude !== null && longitude !== '' ? Number(longitude) : null,
             price,
             viewing_rules: viewing_rules || '',
             description: description || ''
@@ -294,7 +296,7 @@ async function createScheme(data) {
  */
 async function updateScheme(id, data) {
     const schemeId = parseInt(id);
-    const { name, address, price, viewing_rules, description } = data;
+    const { name, address, latitude, longitude, price, viewing_rules, description } = data;
 
     const responseData = await callFlow(SCHEMES_URL, 'POWER_AUTOMATE_SCHEMES_URL', {
         action: 'update',
@@ -302,6 +304,8 @@ async function updateScheme(id, data) {
         data: {
             name,
             address: address || '',
+            latitude: latitude !== undefined && latitude !== null && latitude !== '' ? Number(latitude) : null,
+            longitude: longitude !== undefined && longitude !== null && longitude !== '' ? Number(longitude) : null,
             price,
             viewing_rules: viewing_rules || '',
             description: description || ''
