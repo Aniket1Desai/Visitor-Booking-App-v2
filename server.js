@@ -30,6 +30,30 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ============================================================
+// AUTHENTICATION
+// ============================================================
+
+/**
+ * POST /api/login
+ * Authenticates admin credentials.
+ */
+app.post('/api/login', (req, res) => {
+    const { email, password } = req.body || {};
+    if (email === 'admin@opennest.com' && password === 'admin123') {
+        return res.json({
+            success: true,
+            user: {
+                id: 1,
+                email: 'admin@opennest.com',
+                name: 'Administrator',
+                role: 'admin'
+            }
+        });
+    }
+    return res.status(401).json({ error: 'Invalid email or password' });
+});
+
+// ============================================================
 // BOOKINGS
 // ============================================================
 

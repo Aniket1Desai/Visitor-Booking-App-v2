@@ -185,6 +185,9 @@ function setupNavigationListeners() {
 
 function showSection(sectionId) {
     if (currentRole === 'visitor' && (sectionId === 'dashboard-section' || sectionId === 'admin-schemes-section' || sectionId === 'troubleshoot-section')) {
+        if (typeof window.requestAdminAccess === 'function') {
+            window.requestAdminAccess();
+        }
         sectionId = 'hero-section';
     }
     if (currentRole === 'admin' && sectionId === 'booking-section') {

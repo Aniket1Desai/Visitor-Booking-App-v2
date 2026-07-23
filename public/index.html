@@ -473,21 +473,26 @@
         /* Admin Login Modal */
         #admin-login-modal {
             position: fixed;
-            inset: 0;
-            z-index: 99998;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 999999;
             display: flex;
             align-items: center;
             justify-content: center;
-            background: rgba(0, 0, 0, 0.65);
-            backdrop-filter: blur(6px);
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(8px);
             opacity: 0;
+            visibility: hidden;
             pointer-events: none;
-            transition: opacity 0.25s ease;
+            transition: opacity 0.25s ease, visibility 0.25s ease;
         }
 
         #admin-login-modal.open {
-            opacity: 1;
-            pointer-events: auto;
+            opacity: 1 !important;
+            visibility: visible !important;
+            pointer-events: auto !important;
         }
 
         #admin-login-modal .admin-modal-card {
@@ -694,7 +699,7 @@
                         <i class="fa-solid fa-chevron-down caret"></i>
                     </button>
                     <div class="role-dropdown glass-panel" id="role-dropdown-menu">
-                        <div class="role-option active" id="role-opt-visitor" onclick="switchRole('visitor')">
+                        <div class="role-option active" id="role-opt-visitor" onclick="typeof doLogout === 'function' ? doLogout() : switchRole('visitor')">
                             <i class="fa-solid fa-user"></i>
                             <div>
                                 <strong>Visitor View</strong>
@@ -702,7 +707,7 @@
                             </div>
                         </div>
                         <div class="role-option" id="role-opt-admin"
-                            onclick="window.requestAdminAccess ? window.requestAdminAccess() : switchRole('admin')">
+                            onclick="window.requestAdminAccess(event)">
                             <i class="fa-solid fa-user-shield"></i>
                             <div>
                                 <strong>Admin View</strong>
@@ -1525,6 +1530,9 @@
                     autocomplete="current-password"
                     onkeydown="if(event.key==='Enter') window.submitAdminLogin && window.submitAdminLogin()">
             </div>
+            <div style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.25); border-radius: 8px; padding: 8px 12px; margin-top: 12px; font-size: 0.78rem; color: #cbd5e1; text-align: center;">
+                <i class="fa-solid fa-key" style="color: #8B5CF6; margin-right: 4px;"></i> <strong>Demo Credentials:</strong> <code>admin@opennest.com</code> / <code>admin123</code>
+            </div>
             <div class="modal-actions">
                 <button class="btn-cancel-modal"
                     onclick="window.closeAdminLoginModal && window.closeAdminLoginModal()">Cancel</button>
@@ -1558,6 +1566,34 @@
            visitor@opennest.com  / visitor123 → visitor
     ══════════════════════════════════════════════════ -->
     <script>
+        /* ── GLOBAL ADMIN ACCESS HANDLERS (DEFINED EARLY) ───────── */
+        window.requestAdminAccess = function (e) {
+            if (e && e.stopPropagation) e.stopPropagation();
+            var dropdownContainer = document.querySelector('.role-selector-container');
+            if (dropdownContainer) dropdownContainer.classList.remove('open');
+            window.showAdminLoginModal();
+        };
+
+        window.showAdminLoginModal = function () {
+            var modal = document.getElementById('admin-login-modal');
+            var emailInput = document.getElementById('admin-modal-email');
+            var passInput = document.getElementById('admin-modal-password');
+            var errorEl = document.getElementById('admin-modal-error');
+            if (!modal) return;
+            if (emailInput && !emailInput.value) emailInput.value = 'admin@opennest.com';
+            if (passInput && !passInput.value) passInput.value = 'admin123';
+            if (errorEl) errorEl.classList.remove('visible');
+            modal.classList.add('open');
+            setTimeout(function () { if (passInput) passInput.focus(); }, 100);
+        };
+
+        window.closeAdminLoginModal = function () {
+            var modal = document.getElementById('admin-login-modal');
+            if (modal) {
+                modal.classList.remove('open');
+            }
+        };
+
         /* ── RBAC CONFIGURATION ─────────────────────────────────── */
         var RBAC_PERMISSIONS = {
             visitor: {
@@ -1841,18 +1877,20 @@
                 window.switchRole(appRole);
             }
 
-            /* Navigate to first permitted section */
-            var firstSection = config.nav[0] || 'hero-section';
+            /* Navigate to target section (Admin -> Dashboard, Visitor -> Hero/Book) */
+            var targetSection = (role === 'admin') ? 'dashboard-section' : 'hero-section';
             if (typeof window.showSection === 'function') {
-                window.showSection(firstSection);
+                window.showSection(targetSection);
             }
         }
 
         /* ── LOGOUT → revert to Visitor role (no page reload) ──── */
         function doLogout() {
             try { sessionStorage.removeItem(SESSION_KEY); } catch (e) { }
+            try { localStorage.removeItem(SESSION_KEY); } catch (e) { }
             applyRoleAccess('visitor');
         }
+        window.doLogout = doLogout;
 
         /* ── LOGOUT BUTTON — rendered only when Admin is active ── */
         window.renderLogoutButton = function (show) {
@@ -1877,33 +1915,7 @@
             }
         };
 
-        /* ── ADMIN LOGIN MODAL ───────────────────────────────────── */
-        window.requestAdminAccess = function () {
-            /* Close the role dropdown first */
-            var dropdownContainer = document.querySelector('.role-selector-container');
-            if (dropdownContainer) dropdownContainer.classList.remove('open');
-            /* If already admin, no need to re-authenticate */
-            if (typeof currentRole !== 'undefined' && currentRole === 'admin') return;
-            window.showAdminLoginModal();
-        };
-
-        window.showAdminLoginModal = function () {
-            var modal = document.getElementById('admin-login-modal');
-            var emailInput = document.getElementById('admin-modal-email');
-            var passInput = document.getElementById('admin-modal-password');
-            var errorEl = document.getElementById('admin-modal-error');
-            if (!modal) return;
-            if (emailInput) emailInput.value = '';
-            if (passInput) passInput.value = '';
-            if (errorEl) errorEl.classList.remove('visible');
-            modal.classList.add('open');
-            setTimeout(function () { if (emailInput) emailInput.focus(); }, 100);
-        };
-
-        window.closeAdminLoginModal = function () {
-            var modal = document.getElementById('admin-login-modal');
-            if (modal) modal.classList.remove('open');
-        };
+        /* ── ADMIN LOGIN SUBMIT HANDLER ──────────────────────────── */
 
         window.submitAdminLogin = function () {
             var email = (document.getElementById('admin-modal-email').value || '').trim();
@@ -1926,6 +1938,32 @@
             btn.disabled = true;
             btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>&nbsp; Verifying...';
 
+            function onAuthSuccess(userObj) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i>&nbsp; Sign In';
+                try {
+                    sessionStorage.setItem(SESSION_KEY, JSON.stringify({
+                        role: 'admin',
+                        email: userObj.email || email,
+                        name: userObj.name || 'Admin'
+                    }));
+                } catch (e) { }
+                window.closeAdminLoginModal();
+                applyRoleAccess('admin');
+            }
+
+            function onAuthFailure(msg) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i>&nbsp; Sign In';
+                errorText.textContent = msg || 'Invalid email or password. Please try again.';
+                errorEl.classList.add('visible');
+            }
+
+            if (email.toLowerCase() === 'admin@opennest.com' && password === 'admin123') {
+                onAuthSuccess({ email: 'admin@opennest.com', name: 'Administrator' });
+                return;
+            }
+
             fetch('/api/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1933,34 +1971,14 @@
             })
                 .then(function (res) { return res.json(); })
                 .then(function (data) {
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i>&nbsp; Sign In';
-
-                    if (data.error || !data.user || data.user.role !== 'admin') {
-                        errorText.textContent = 'Invalid credentials or insufficient permissions.';
-                        errorEl.classList.add('visible');
-                        return;
+                    if (data && data.success && data.user && data.user.role === 'admin') {
+                        onAuthSuccess(data.user);
+                    } else {
+                        onAuthFailure(data ? data.error : null);
                     }
-
-                    /* Store admin session for this browser tab only */
-                    try { sessionStorage.setItem(SESSION_KEY, JSON.stringify({ role: 'admin', email: data.user.email, name: data.user.name })); } catch (e) { }
-
-                    window.closeAdminLoginModal();
-                    applyRoleAccess('admin');
                 })
                 .catch(function () {
-                    /* Fallback: allow demo credentials when backend is unreachable */
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i>&nbsp; Sign In';
-
-                    if (email === 'admin@opennest.com' && password === 'admin123') {
-                        try { sessionStorage.setItem(SESSION_KEY, JSON.stringify({ role: 'admin', email: email, name: 'Admin', demo: true })); } catch (e) { }
-                        window.closeAdminLoginModal();
-                        applyRoleAccess('admin');
-                    } else {
-                        errorText.textContent = 'Invalid credentials. Please try again.';
-                        errorEl.classList.add('visible');
-                    }
+                    onAuthFailure('Unable to authenticate. Check your credentials.');
                 });
         };
 
@@ -1969,21 +1987,12 @@
             if (e.target === this) window.closeAdminLoginModal();
         });
 
-        /* ── BOOT: Always start as Visitor — no login screen on load ─ */
+        /* ── BOOT: Always start in anonymous Visitor mode ─ */
         (function bootAsVisitor() {
-            /* sessionStorage check: allow same-tab admin session to persist across
-               soft navigations, but a fresh browser session always starts as visitor */
-            var raw = null;
-            try { raw = sessionStorage.getItem(SESSION_KEY); } catch (e) { }
+            try { sessionStorage.removeItem(SESSION_KEY); } catch (e) { }
+            try { localStorage.removeItem(SESSION_KEY); } catch (e) { }
 
             var role = 'visitor';
-            if (raw) {
-                try {
-                    var s = JSON.parse(raw);
-                    if (s && s.role === 'admin') role = 'admin';
-                } catch (e) { }
-            }
-
             _selectedLoginRole = role;
             applyRoleAccess(role);
         })();
