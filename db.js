@@ -84,6 +84,35 @@ function extractItems(responseData) {
 /**
  * Retrieve all booking records from SharePoint, sorted by date desc / time asc.
  */
+function parseBookingDateTime(dateStr, timeStr) {
+    if (!dateStr) return new Date(0);
+    if (!timeStr) return new Date(`${dateStr}T23:59:59`);
+    const match = String(timeStr).match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+    let hours = 0;
+    let minutes = 0;
+    if (match) {
+        hours = parseInt(match[1], 10);
+        minutes = parseInt(match[2], 10);
+        const ampm = match[3] ? match[3].toUpperCase() : null;
+        if (ampm === 'PM' && hours < 12) {
+            hours += 12;
+        } else if (ampm === 'AM' && hours === 12) {
+            hours = 0;
+        }
+    }
+    const hh = String(hours).padStart(2, '0');
+    const mm = String(minutes).padStart(2, '0');
+    const d = new Date(`${dateStr}T${hh}:${mm}:00`);
+    if (!isNaN(d.getTime())) return d;
+
+    const parsedDate = new Date(dateStr);
+    if (!isNaN(parsedDate.getTime())) {
+        parsedDate.setHours(hours, minutes, 0, 0);
+        return parsedDate;
+    }
+    return new Date(0);
+}
+
 async function getAllBookings() {
     const responseData = await callFlow(
         BOOKINGS_URL,
@@ -98,8 +127,8 @@ async function getAllBookings() {
     const now = new Date();
 
     items.sort((a, b) => {
-        const dateTimeA = new Date(`${a.booking_date}T${a.booking_time}`);
-        const dateTimeB = new Date(`${b.booking_date}T${b.booking_time}`);
+        const dateTimeA = parseBookingDateTime(a.booking_date, a.booking_time);
+        const dateTimeB = parseBookingDateTime(b.booking_date, b.booking_time);
 
         const aUpcoming = dateTimeA >= now;
         const bUpcoming = dateTimeB >= now;
@@ -109,7 +138,7 @@ async function getAllBookings() {
         if (!aUpcoming && bUpcoming) return 1;
 
         if (aUpcoming && bUpcoming) {
-            // Closest upcoming booking first
+            // Closest upcoming booking first (same date sorted by time ascending)
             return dateTimeA - dateTimeB;
         }
 

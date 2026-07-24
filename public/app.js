@@ -395,6 +395,28 @@ async function refreshData() {
     }
 }
 
+async function triggerDashboardRefresh(btn) {
+    if (btn) {
+        btn.disabled = true;
+        const icon = btn.querySelector('i');
+        if (icon) icon.classList.add('fa-spin');
+    }
+    showToast("Refreshing", "Fetching latest dashboard data...", "info-theme");
+    try {
+        await refreshData();
+        showToast("Refreshed", "Dashboard data updated successfully.", "success");
+    } catch (err) {
+        showToast("Refresh Error", "Failed to refresh dashboard data.", "error");
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            const icon = btn.querySelector('i');
+            if (icon) icon.classList.remove('fa-spin');
+        }
+    }
+}
+window.triggerDashboardRefresh = triggerDashboardRefresh;
+
 async function submitBooking() {
     const btnSubmit = document.getElementById('btn-submit-booking');
     btnSubmit.disabled = true;
@@ -531,7 +553,15 @@ function parseBookingDateTime(dateStr, timeStr) {
 
     const hh = String(hours).padStart(2, '0');
     const mm = String(minutes).padStart(2, '0');
-    return new Date(`${dateStr}T${hh}:${mm}:00`);
+    const d = new Date(`${dateStr}T${hh}:${mm}:00`);
+    if (!isNaN(d.getTime())) return d;
+
+    const parsedDate = new Date(dateStr);
+    if (!isNaN(parsedDate.getTime())) {
+        parsedDate.setHours(hours, minutes, 0, 0);
+        return parsedDate;
+    }
+    return new Date(0);
 }
 
 function updateDashboardStats(gridBookings) {
@@ -557,24 +587,31 @@ function getFilteredBookings() {
     const searchVal = input ? input.value.toLowerCase().trim() : '';
 
     // Only active and upcoming bookings (scheduled date/time >= current date/time)
-    const activeUpcoming = allBookings.filter(b => {
+    let list = allBookings.filter(b => {
         const dt = parseBookingDateTime(b.booking_date, b.booking_time);
         return dt >= now;
     });
 
-    if (!searchVal) {
-        return activeUpcoming;
+    if (searchVal) {
+        list = list.filter(b =>
+            (b.visitor_name || '').toLowerCase().includes(searchVal) ||
+            (b.visitor_email || '').toLowerCase().includes(searchVal) ||
+            (b.visitor_phone || '').toLowerCase().includes(searchVal) ||
+            (b.scheme_name || '').toLowerCase().includes(searchVal) ||
+            (b.booking_date || '').includes(searchVal) ||
+            (b.booking_time || '').toLowerCase().includes(searchVal) ||
+            (b.status || '').toLowerCase().includes(searchVal)
+        );
     }
 
-    return activeUpcoming.filter(b =>
-        (b.visitor_name || '').toLowerCase().includes(searchVal) ||
-        (b.visitor_email || '').toLowerCase().includes(searchVal) ||
-        (b.visitor_phone || '').toLowerCase().includes(searchVal) ||
-        (b.scheme_name || '').toLowerCase().includes(searchVal) ||
-        (b.booking_date || '').includes(searchVal) ||
-        (b.booking_time || '').toLowerCase().includes(searchVal) ||
-        (b.status || '').toLowerCase().includes(searchVal)
-    );
+    // Sort by Date & Time ascending (if dates are the same, arrange chronologically by time)
+    list.sort((a, b) => {
+        const dtA = parseBookingDateTime(a.booking_date, a.booking_time);
+        const dtB = parseBookingDateTime(b.booking_date, b.booking_time);
+        return dtA - dtB;
+    });
+
+    return list;
 }
 
 function renderBookingsTable(filteredBookings = getFilteredBookings()) {

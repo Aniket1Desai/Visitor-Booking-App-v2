@@ -1087,12 +1087,18 @@
 
                 <div class="dashboard-grid">
                     <div class="dashboard-card glass-panel bookings-list-card">
-                        <div class="card-header">
+                        <div class="card-header" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
                             <h3>Registered Private Tours</h3>
-                            <div class="search-wrapper">
-                                <i class="fa-solid fa-magnifying-glass search-icon"></i>
-                                <input type="text" id="search-input" class="glass-input"
-                                    placeholder="Search by name, email, or date..." oninput="filterBookings()">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <div class="search-wrapper">
+                                    <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                                    <input type="text" id="search-input" class="glass-input"
+                                        placeholder="Search by name, email, or date..." oninput="filterBookings()">
+                                </div>
+                                <button class="btn-primary" id="btn-refresh-dashboard" onclick="triggerDashboardRefresh(this)"
+                                    title="Refresh Dashboard Data" style="padding: 9px 16px; border-radius: 10px; font-size: 0.85rem; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; cursor: pointer;">
+                                    <i class="fa-solid fa-rotate-right"></i> Refresh
+                                </button>
                             </div>
                         </div>
 
