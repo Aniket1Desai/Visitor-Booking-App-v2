@@ -327,8 +327,20 @@ function renderTimeSlots(dateInputId, containerId, hiddenInputId) {
     const currentSelected = hiddenInput.value;
     hiddenInput.value = '';
 
+    let currentSchemeName = '';
+    if (dateInputId === 'booking_date') {
+        const schemeSelect = document.getElementById('booking_scheme');
+        currentSchemeName = (schemeSelect ? schemeSelect.value : '') || bookingData.scheme_name || '';
+    } else if (dateInputId === 'reschedule-date') {
+        currentSchemeName = window.activeRescheduleSchemeName || '';
+    }
+
     const bookedTimes = allBookings
-        .filter(b => b.booking_date === dateVal && b.status !== 'Cancelled')
+        .filter(b =>
+            b.booking_date === dateVal &&
+            b.status !== 'Cancelled' &&
+            (!currentSchemeName || (b.scheme_name || '').toLowerCase().trim() === currentSchemeName.toLowerCase().trim())
+        )
         .map(b => b.booking_time);
 
     let hasSelectedValidSlot = false;
@@ -553,6 +565,8 @@ function openRescheduleModal(id, date, time) {
     const modal = document.getElementById('reschedule-modal');
     document.getElementById('reschedule-booking-id').value = id;
     document.getElementById('reschedule-date').value = date;
+    const targetBooking = allBookings.find(b => String(b.id) === String(id));
+    window.activeRescheduleSchemeName = targetBooking ? targetBooking.scheme_name : '';
     modal.classList.add('open');
     renderTimeSlots('reschedule-date', 'reschedule-slots-container', 'reschedule-selected-time');
 }
@@ -1009,6 +1023,14 @@ function populateSchemesDropdown() {
 
         if (previousBookingValue && allSchemes.some(s => s.name === previousBookingValue)) {
             dropdown.value = previousBookingValue;
+        }
+
+        if (!dropdown.dataset.hasChangeListener) {
+            dropdown.dataset.hasChangeListener = "true";
+            dropdown.addEventListener('change', (e) => {
+                bookingData.scheme_name = e.target.value;
+                renderTimeSlots('booking_date', 'slots-container', 'selected_time');
+            });
         }
     }
 

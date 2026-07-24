@@ -162,15 +162,16 @@ async function createBooking(data) {
 
     const vCount = parseInt(visitor_count) || 1;
 
-    // Conflict check — fetch current bookings and verify slot availability
+    // Conflict check — fetch current bookings and verify slot availability for the specific property scheme
     const { data: existing } = await getAllBookings();
     const conflict = existing.some(b =>
+        (b.scheme_name || '').toLowerCase().trim() === (scheme_name || '').toLowerCase().trim() &&
         b.booking_date === booking_date &&
         b.booking_time === booking_time &&
         b.status !== 'Cancelled'
     );
     if (conflict) {
-        throw new Error('This date and time slot is already booked.');
+        throw new Error('This date and time slot is already booked for this property scheme.');
     }
 
     const responseData = await callFlow(BOOKINGS_URL, 'POWER_AUTOMATE_BOOKINGS_URL', {
@@ -199,21 +200,22 @@ async function createBooking(data) {
 async function rescheduleBooking(id, date, time) {
     const bookingId = parseInt(id);
 
-    // Conflict check — exclude the booking being rescheduled
     const { data: existing } = await getAllBookings();
+    const target = existing.find(b => Number(b.id) === bookingId);
+    if (!target) {
+        throw new Error('Booking not found.');
+    }
+
+    // Conflict check — check against same property scheme, date, and time
     const conflict = existing.some(b =>
+        (b.scheme_name || '').toLowerCase().trim() === (target.scheme_name || '').toLowerCase().trim() &&
         b.booking_date === date &&
         b.booking_time === time &&
         Number(b.id) !== bookingId &&
         b.status !== 'Cancelled'
     );
     if (conflict) {
-        throw new Error('The selected new time slot is already booked.');
-    }
-
-    const target = existing.find(b => Number(b.id) === bookingId);
-    if (!target) {
-        throw new Error('Booking not found.');
+        throw new Error('The selected new time slot is already booked for this property scheme.');
     }
 
     const responseData = await callFlow(BOOKINGS_URL, 'POWER_AUTOMATE_BOOKINGS_URL', {
