@@ -213,14 +213,14 @@ app.get('/api/schemes', async (req, res) => {
  * Creates a new property scheme in SharePoint.
  */
 app.post('/api/schemes', async (req, res) => {
-    const { name, address, latitude, longitude, price, viewing_rules, description } = req.body;
+    const { name, address, price, viewing_rules, description } = req.body;
 
     if (!name || !price) {
         return res.status(400).json({ error: 'Missing required scheme fields (name, price)' });
     }
 
     try {
-        const result = await db.createScheme({ name, address, latitude, longitude, price, viewing_rules, description });
+        const result = await db.createScheme({ name, address, price, viewing_rules, description });
         res.status(201).json({ success: true, scheme: result.scheme });
     } catch (err) {
         if (err.message.includes('already exists')) return res.status(409).json({ error: err.message });
@@ -235,14 +235,14 @@ app.post('/api/schemes', async (req, res) => {
  */
 app.put('/api/schemes/:id', async (req, res) => {
     const { id } = req.params;
-    const { name, address, latitude, longitude, price, viewing_rules, description } = req.body;
+    const { name, address, price, viewing_rules, description } = req.body;
 
     if (!name || !price) {
         return res.status(400).json({ error: 'Missing required scheme fields (name, price)' });
     }
 
     try {
-        const result = await db.updateScheme(id, { name, address, latitude, longitude, price, viewing_rules, description });
+        const result = await db.updateScheme(id, { name, address, price, viewing_rules, description });
         res.json({ success: true, scheme: result.scheme });
     } catch (err) {
         if (err.message.includes('not found')) return res.status(404).json({ error: err.message });

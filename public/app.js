@@ -1237,8 +1237,6 @@ function openEditSchemeModal(id) {
     document.getElementById('edit-scheme-id').value = scheme.id;
     document.getElementById('edit-scheme-name').value = scheme.name || '';
     document.getElementById('edit-scheme-address').value = scheme.address || '';
-    document.getElementById('edit-scheme-lat').value = scheme.latitude || '';
-    document.getElementById('edit-scheme-lng').value = scheme.longitude || '';
     document.getElementById('edit-scheme-price').value = scheme.price || '';
     document.getElementById('edit-scheme-rules').value = scheme.viewing_rules || '';
     document.getElementById('edit-scheme-desc').value = scheme.description || '';
@@ -1257,8 +1255,6 @@ async function submitEditScheme(e) {
     const id = document.getElementById('edit-scheme-id').value;
     const name = document.getElementById('edit-scheme-name').value.trim();
     const address = document.getElementById('edit-scheme-address').value.trim();
-    const latitude = document.getElementById('edit-scheme-lat').value.trim();
-    const longitude = document.getElementById('edit-scheme-lng').value.trim();
     const price = document.getElementById('edit-scheme-price').value.trim();
     const viewing_rules = document.getElementById('edit-scheme-rules').value.trim();
     const description = document.getElementById('edit-scheme-desc').value.trim();
@@ -1278,7 +1274,7 @@ async function submitEditScheme(e) {
         const response = await fetch(`/api/schemes/${id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, address, latitude, longitude, price, viewing_rules, description })
+            body: JSON.stringify({ name, address, price, viewing_rules, description })
         });
 
         if (!response.ok) throw new Error("Failed to update property scheme.");
@@ -1353,8 +1349,6 @@ async function submitScheme(e) {
 
     const nameInput = document.getElementById('scheme_name_input');
     const addressInput = document.getElementById('scheme_address_input');
-    const latInput = document.getElementById('scheme_lat_input');
-    const lngInput = document.getElementById('scheme_lng_input');
     const priceInput = document.getElementById('scheme_price_input');
     const rulesInput = document.getElementById('scheme_rules_input');
     const descInput = document.getElementById('scheme_desc_input');
@@ -1362,8 +1356,6 @@ async function submitScheme(e) {
 
     const name = nameInput.value.trim();
     const address = addressInput.value.trim();
-    const latitude = latInput ? latInput.value.trim() : '';
-    const longitude = lngInput ? lngInput.value.trim() : '';
     const price = priceInput.value.trim();
     const viewing_rules = rulesInput.value.trim();
     const description = descInput.value.trim();
@@ -1380,7 +1372,7 @@ async function submitScheme(e) {
         const response = await fetch('/api/schemes', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, address, latitude, longitude, price, viewing_rules, description })
+            body: JSON.stringify({ name, address, price, viewing_rules, description })
         });
 
         if (response.status === 409) throw new Error("A scheme with this property name already exists.");
