@@ -24,15 +24,15 @@ function validateBookingDetails(name, email, phone) {
         errors.push("Name may contain only letters and spaces.");
     }
 
-    // Email: must be a gmail.com address
-    if (!/^[^\s@]+@gmail\.com$/i.test(email)) {
-        errors.push("Email must be a valid gmail.com address (e.g. name@gmail.com).");
+    // Email: standard valid email address
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        errors.push("Please enter a valid email address (e.g. name@example.com).");
     }
 
-    // Phone: exactly 10 digits (spaces/dashes ignored)
-    const phoneDigits = String(phone).replace(/[\s-]/g, '');
-    if (!/^\d{10}$/.test(phoneDigits)) {
-        errors.push("Phone number must be exactly 10 digits.");
+    // Phone: 7 to 15 digits (spaces/dashes/plus ignored)
+    const phoneDigits = String(phone).replace(/[\s-()+]/g, '');
+    if (!/^\d{7,15}$/.test(phoneDigits)) {
+        errors.push("Phone number must contain valid digits (7 to 15 digits).");
     }
 
     return errors;
@@ -192,20 +192,13 @@ function setupNavigationListeners() {
 }
 
 function showSection(sectionId) {
-    let isAdminAuth = (currentRole === 'admin');
-    if (isAdminAuth) {
-        try {
-            const sessionStr = sessionStorage.getItem('opennest_session') || localStorage.getItem('opennest_session');
-            const sess = sessionStr ? JSON.parse(sessionStr) : null;
-            if (!sess || sess.role !== 'admin') isAdminAuth = false;
-        } catch(e) { isAdminAuth = false; }
-    }
+    const isAdminSection = (sectionId === 'dashboard-section' || sectionId === 'admin-schemes-section' || sectionId === 'troubleshoot-section');
 
-    if (!isAdminAuth && (sectionId === 'dashboard-section' || sectionId === 'admin-schemes-section' || sectionId === 'troubleshoot-section')) {
+    if (isAdminSection && currentRole !== 'admin') {
         if (typeof window.requestAdminAccess === 'function') {
             window.requestAdminAccess();
         }
-        sectionId = 'hero-section';
+        return;
     }
     if (currentRole === 'admin' && sectionId === 'booking-section') {
         sectionId = 'dashboard-section';
@@ -406,7 +399,7 @@ function nextStep(step) {
 
         bookingData.visitor_name = name;
         bookingData.visitor_email = email;
-        bookingData.visitor_phone = phone.replace(/[\s-]/g, '');  // store clean digits
+        bookingData.visitor_phone = phone.replace(/[\s-()+]/g, '');  // store clean digits
         bookingData.visitor_count = parseInt(document.getElementById('visitor_count').value);
         bookingData.scheme_name = scheme;
         selectedLocationSchemeName = scheme;

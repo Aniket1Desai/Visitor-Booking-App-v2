@@ -1602,22 +1602,15 @@
             setTimeout(function () { if (passInput) passInput.focus(); }, 100);
         };
 
+        /* Cancel / close / outside-click / Esc all funnel here. The app is
+           never switched to Admin until login actually succeeds (see
+           requestAdminAccess / onAuthSuccess), so closing the popup here
+           never needs to change role or navigate — it just dismisses the
+           dialog and leaves the visitor exactly where they were. */
         window.closeAdminLoginModal = function () {
             var modal = document.getElementById('admin-login-modal');
             if (modal) {
                 modal.classList.remove('open');
-            }
-            var isAuth = false;
-            try {
-                var sStr = sessionStorage.getItem(SESSION_KEY) || localStorage.getItem(SESSION_KEY);
-                if (sStr) {
-                    var parsed = JSON.parse(sStr);
-                    if (parsed && parsed.role === 'admin') isAuth = true;
-                }
-            } catch (e) { }
-
-            if (!isAuth && typeof applyRoleAccess === 'function') {
-                applyRoleAccess('visitor');
             }
         };
 

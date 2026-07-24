@@ -100,17 +100,16 @@ app.post('/api/bookings', async (req, res) => {
         errors.push('Name may contain only letters and spaces.');
     }
 
-    // Email: must contain @ and be a gmail.com address (as requested)
-    // To accept ANY valid email instead, use: /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    const emailRegex = /^[^\s@]+@gmail\.com$/i;
+    // Email: standard valid email address
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(visitor_email.trim())) {
-        errors.push('Email must be a valid gmail.com address (e.g. name@gmail.com).');
+        errors.push('Please enter a valid email address (e.g. name@example.com).');
     }
 
-    // Phone: exactly 10 digits (spaces and dashes are stripped before checking)
-    const phoneDigits = String(visitor_phone).replace(/[\s-]/g, '');
-    if (!/^\d{10}$/.test(phoneDigits)) {
-        errors.push('Phone number must be exactly 10 digits.');
+    // Phone: 7 to 15 digits
+    const phoneDigits = String(visitor_phone).replace(/[\s-()+]/g, '');
+    if (!/^\d{7,15}$/.test(phoneDigits)) {
+        errors.push('Phone number must contain valid digits (7 to 15 digits).');
     }
 
     if (errors.length > 0) {
