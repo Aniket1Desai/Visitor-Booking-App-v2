@@ -894,11 +894,15 @@
                             <div class="form-group calendar-group">
                                 <label for="booking_date">Select Tour Date <span class="required">*</span></label>
                                 <input type="date" id="booking_date" class="glass-input" required>
-                                <p class="input-helper">Visits can be booked starting tomorrow and up to 30 days in
-                                    advance.</p>
+                                <p class="input-helper">Visits can be booked starting today and up to 30 days in advance.</p>
                             </div>
                             <div class="form-group time-slots-group">
-                                <label>Select Tour Time <span class="required">*</span></label>
+                                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+                                    <label style="margin:0;">Select Tour Time <span class="required">*</span></label>
+                                    <button type="button" class="btn-refresh-slots" onclick="refreshTimeSlots(this, 'booking_date', 'slots-container', 'selected_time')" title="Reload time slot availability">
+                                        <i class="fa-solid fa-rotate-right"></i> Refresh Slots
+                                    </button>
+                                </div>
                                 <div class="time-slots-grid" id="slots-container"></div>
                                 <input type="hidden" id="selected_time" required>
                             </div>
@@ -1446,7 +1450,12 @@
                             onchange="onRescheduleDateChange()">
                     </div>
                     <div class="form-group">
-                        <label>Select New Time Slot <span class="required">*</span></label>
+                        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+                            <label style="margin:0;">Select New Time Slot <span class="required">*</span></label>
+                            <button type="button" class="btn-refresh-slots" onclick="refreshTimeSlots(this, 'reschedule-date', 'reschedule-slots-container', 'reschedule-selected-time')" title="Reload slot availability">
+                                <i class="fa-solid fa-rotate-right"></i> Refresh Slots
+                            </button>
+                        </div>
                         <div class="time-slots-grid" id="reschedule-slots-container"></div>
                         <input type="hidden" id="reschedule-selected-time" required>
                     </div>
@@ -1597,6 +1606,18 @@
             var modal = document.getElementById('admin-login-modal');
             if (modal) {
                 modal.classList.remove('open');
+            }
+            var isAuth = false;
+            try {
+                var sStr = sessionStorage.getItem(SESSION_KEY) || localStorage.getItem(SESSION_KEY);
+                if (sStr) {
+                    var parsed = JSON.parse(sStr);
+                    if (parsed && parsed.role === 'admin') isAuth = true;
+                }
+            } catch (e) { }
+
+            if (!isAuth && typeof applyRoleAccess === 'function') {
+                applyRoleAccess('visitor');
             }
         };
 
@@ -1826,6 +1847,18 @@
 
         /* ── APPLY ROLE ACCESS (RBAC CORE) ───────────────────────── */
         function applyRoleAccess(role) {
+            if (role === 'admin') {
+                var isAuth = false;
+                try {
+                    var sStr = sessionStorage.getItem(SESSION_KEY) || localStorage.getItem(SESSION_KEY);
+                    if (sStr) {
+                        var parsed = JSON.parse(sStr);
+                        if (parsed && parsed.role === 'admin') isAuth = true;
+                    }
+                } catch (e) { }
+                if (!isAuth) role = 'visitor';
+            }
+
             var config = RBAC_PERMISSIONS[role] || RBAC_PERMISSIONS['visitor'];
 
             /* 1. Theme */
@@ -1991,6 +2024,16 @@
         /* Close admin modal when clicking backdrop */
         document.getElementById('admin-login-modal').addEventListener('click', function (e) {
             if (e.target === this) window.closeAdminLoginModal();
+        });
+
+        /* Close admin modal when pressing Escape key */
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' || e.key === 'Esc') {
+                var modal = document.getElementById('admin-login-modal');
+                if (modal && modal.classList.contains('open')) {
+                    window.closeAdminLoginModal();
+                }
+            }
         });
 
         /* ── BOOT: Always start in anonymous Visitor mode ─ */

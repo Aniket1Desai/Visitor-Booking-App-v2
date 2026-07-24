@@ -133,30 +133,38 @@ document.addEventListener('DOMContentLoaded', () => {
     setupRoleDropdownCloseListener();
 });
 
+function getLocalDateString(d = new Date()) {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
 function initDatePickers() {
     const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
     const maxDate = new Date(today);
     maxDate.setDate(maxDate.getDate() + 30);
 
-    const tomString = tomorrow.toISOString().split('T')[0];
-    const maxString = maxDate.toISOString().split('T')[0];
+    const todayString = getLocalDateString(today);
+    const maxString = getLocalDateString(maxDate);
 
     const dateInput = document.getElementById('booking_date');
     const reschedInput = document.getElementById('reschedule-date');
 
     if (dateInput) {
-        dateInput.min = tomString;
+        dateInput.min = todayString;
         dateInput.max = maxString;
-        dateInput.value = tomString;
-        bookingData.booking_date = tomString;
+        if (!dateInput.value || dateInput.value < todayString || dateInput.value > maxString) {
+            dateInput.value = todayString;
+            bookingData.booking_date = todayString;
+        }
         dateInput.addEventListener('change', onDateChange);
     }
 
     if (reschedInput) {
-        reschedInput.min = tomString;
+        reschedInput.min = todayString;
         reschedInput.max = maxString;
+        reschedInput.addEventListener('change', onRescheduleDateChange);
     }
 }
 
@@ -184,7 +192,16 @@ function setupNavigationListeners() {
 }
 
 function showSection(sectionId) {
-    if (currentRole === 'visitor' && (sectionId === 'dashboard-section' || sectionId === 'admin-schemes-section' || sectionId === 'troubleshoot-section')) {
+    let isAdminAuth = (currentRole === 'admin');
+    if (isAdminAuth) {
+        try {
+            const sessionStr = sessionStorage.getItem('opennest_session') || localStorage.getItem('opennest_session');
+            const sess = sessionStr ? JSON.parse(sessionStr) : null;
+            if (!sess || sess.role !== 'admin') isAdminAuth = false;
+        } catch(e) { isAdminAuth = false; }
+    }
+
+    if (!isAdminAuth && (sectionId === 'dashboard-section' || sectionId === 'admin-schemes-section' || sectionId === 'troubleshoot-section')) {
         if (typeof window.requestAdminAccess === 'function') {
             window.requestAdminAccess();
         }
@@ -258,31 +275,97 @@ function onRescheduleDateChange() {
     renderTimeSlots('reschedule-date', 'reschedule-slots-container', 'reschedule-selected-time');
 }
 
+async function refreshTimeSlots(btn, dateInputId = 'booking_date', containerId = 'slots-container', hiddenInputId = 'selected_time') {
+    if (btn) {
+        btn.disabled = true;
+        const icon = btn.querySelector('i');
+        if (icon) icon.classList.add('fa-spin');
+    }
+    try {
+        const bRes = await fetch('/api/bookings');
+        const bookingsRes = await bRes.json();
+        allBookings = bookingsRes.data || [];
+        renderTimeSlots(dateInputId, containerId, hiddenInputId);
+        showToast("Slots Refreshed", "Time slot availability updated for selected date.", "info-theme");
+    } catch (err) {
+        showToast("Refresh Error", "Unable to reload slot availability.", "error");
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            const icon = btn.querySelector('i');
+            if (icon) icon.classList.remove('fa-spin');
+        }
+    }
+}
+window.refreshTimeSlots = refreshTimeSlots;
+
 function renderTimeSlots(dateInputId, containerId, hiddenInputId) {
-    const dateVal = document.getElementById(dateInputId).value;
+    const dateInput = document.getElementById(dateInputId);
     const container = document.getElementById(containerId);
     const hiddenInput = document.getElementById(hiddenInputId);
 
-    if (!dateVal || !container) return;
+    if (!dateInput || !container || !hiddenInput) return;
+
+    const dateVal = dateInput.value;
+    if (!dateVal) return;
+
+    const now = new Date();
+    const todayString = getLocalDateString(now);
+
+    const maxDate = new Date(now);
+    maxDate.setDate(maxDate.getDate() + 30);
+    const maxString = getLocalDateString(maxDate);
+
+    if (dateVal < todayString) {
+        dateInput.value = todayString;
+        if (dateInputId === 'booking_date') bookingData.booking_date = todayString;
+        showToast("Invalid Date", "Past dates cannot be selected. Reset to today.", "warning");
+        return renderTimeSlots(dateInputId, containerId, hiddenInputId);
+    }
+
+    if (dateVal > maxString) {
+        dateInput.value = maxString;
+        if (dateInputId === 'booking_date') bookingData.booking_date = maxString;
+        showToast("Date Out of Range", "Bookings are allowed up to 30 days in advance.", "warning");
+        return renderTimeSlots(dateInputId, containerId, hiddenInputId);
+    }
 
     container.innerHTML = '';
+    const currentSelected = hiddenInput.value;
     hiddenInput.value = '';
 
     const bookedTimes = allBookings
         .filter(b => b.booking_date === dateVal && b.status !== 'Cancelled')
         .map(b => b.booking_time);
 
+    let hasSelectedValidSlot = false;
+
     timeSlots.forEach(slot => {
         const slotEl = document.createElement('div');
         slotEl.className = 'time-slot';
 
+        const slotDateTime = parseBookingDateTime(dateVal, slot);
+        const isPastSlot = (dateVal === todayString) && (slotDateTime < now);
         const isBooked = bookedTimes.includes(slot);
 
-        if (isBooked) {
-            slotEl.classList.add('booked');
-            slotEl.innerHTML = `<i class="fa-solid fa-lock"></i> ${slot}`;
+        if (isPastSlot) {
+            slotEl.classList.add('disabled', 'past-slot');
+            slotEl.innerHTML = `<i class="fa-solid fa-clock-rotate-left"></i> ${slot} <span class="slot-badge">Passed</span>`;
+            slotEl.title = "This time slot has already passed today.";
+        } else if (isBooked) {
+            slotEl.classList.add('disabled', 'booked');
+            slotEl.innerHTML = `<i class="fa-solid fa-lock"></i> ${slot} <span class="slot-badge">Full</span>`;
+            slotEl.title = "This time slot is already booked.";
         } else {
             slotEl.innerHTML = `<i class="fa-solid fa-clock"></i> ${slot}`;
+
+            if (currentSelected === slot) {
+                slotEl.classList.add('selected');
+                hiddenInput.value = slot;
+                if (hiddenInputId === 'selected_time') bookingData.booking_time = slot;
+                hasSelectedValidSlot = true;
+            }
+
             slotEl.addEventListener('click', () => {
                 container.querySelectorAll('.time-slot').forEach(el => el.classList.remove('selected'));
                 slotEl.classList.add('selected');
@@ -295,6 +378,10 @@ function renderTimeSlots(dateInputId, containerId, hiddenInputId) {
 
         container.appendChild(slotEl);
     });
+
+    if (!hasSelectedValidSlot && hiddenInputId === 'selected_time') {
+        bookingData.booking_time = '';
+    }
 }
 
 function nextStep(step) {
@@ -783,6 +870,25 @@ function setupRoleDropdownCloseListener() {
 }
 
 function switchRole(role) {
+    if (role === 'admin') {
+        let isAuth = false;
+        try {
+            const sessStr = sessionStorage.getItem('opennest_session') || localStorage.getItem('opennest_session');
+            if (sessStr) {
+                const sess = JSON.parse(sessStr);
+                if (sess && sess.role === 'admin') isAuth = true;
+            }
+        } catch (e) { }
+
+        if (!isAuth) {
+            currentRole = 'visitor';
+            if (typeof window.requestAdminAccess === 'function') {
+                window.requestAdminAccess();
+            }
+            return;
+        }
+    }
+
     currentRole = role;
 
     const container = document.querySelector('.role-selector-container');

@@ -2417,3 +2417,89 @@ body.light-theme #admin-login-modal .btn-login:hover {
         width: 100%;
     }
 }
+
+/* ====================================================================
+   TIME SLOT AVAILABILITY ENHANCEMENTS & REFRESH BUTTON
+   ==================================================================== */
+.btn-refresh-slots {
+    background: var(--field-bg);
+    border: 1px solid var(--glass-border);
+    color: var(--text-secondary);
+    padding: 5px 12px;
+    border-radius: 8px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: var(--transition-smooth);
+}
+
+.btn-refresh-slots:hover:not(:disabled) {
+    background: rgba(124, 58, 237, 0.12);
+    color: var(--accent-violet);
+    border-color: var(--glass-border-focus);
+}
+
+.btn-refresh-slots:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.time-slot.disabled {
+    opacity: 0.5;
+    cursor: not-allowed !important;
+    pointer-events: none;
+    background: rgba(15, 23, 42, 0.4);
+    border-color: rgba(255, 255, 255, 0.05);
+    color: var(--text-muted);
+}
+
+.time-slot.past-slot {
+    background: rgba(239, 68, 68, 0.05);
+    border-color: rgba(239, 68, 68, 0.18);
+}
+
+.time-slot.booked {
+    background: rgba(245, 158, 11, 0.05);
+    border-color: rgba(245, 158, 11, 0.18);
+}
+
+.slot-badge {
+    font-size: 0.65rem;
+    padding: 2px 5px;
+    border-radius: 4px;
+    margin-left: 6px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: inline-block;
+}
+
+.time-slot.past-slot .slot-badge {
+    background: rgba(239, 68, 68, 0.15);
+    color: #fca5a5;
+}
+
+.time-slot.booked .slot-badge {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fcd34d;
+}
+
+body.light-theme .btn-refresh-slots {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+    color: #475569;
+}
+
+body.light-theme .btn-refresh-slots:hover:not(:disabled) {
+    background: #e2e8f0;
+    color: #7c3aed;
+}
+
+body.light-theme .time-slot.disabled {
+    background: #f1f5f9;
+    border-color: #e2e8f0;
+    color: #94a3b8;
+}
